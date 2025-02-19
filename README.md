@@ -40,16 +40,16 @@ The file must follow this JSON structure:
     - It configures function declarations for various issues based on a predetermined list.
 
 2. **Data Collection**
-    - data_google: Searches for articles related to each issue using Google Custom Search [test.py](test.py).
-    - data_fmp: Fetches ESG scores from Financial Modeling Prep using the provided symbol (test.py#L44).
+    - data_google: Searches for articles related to each issue using Google Custom Search.
+    - data_fmp: Fetches ESG scores from Financial Modeling Prep using the provided symbol.
     - Processing:
-    The ask_about_article function sends the article content to the AI model to get scores and significance values. These values are then aggregated to generate a final score per company (test.py#L85).
+    The ask_about_article function sends the article content to the AI model to get scores and significance values. These values are then aggregated to generate a final score per company.
 
 3. **Execution**
-    - Running the test.py script will perform analysis for each company, combining data from both APIs, and output the scores to the terminal.
+    - Running the analyze_data.py script will perform analysis for each company, combining data from both APIs, and output the scores to the terminal.
 
 4. **Running the Project**
-    - To execute the analysis, run `python test.py`.
+    - To execute the analysis, run `python analyze_data.py`.
     Watch the console output for analysis progress and final scores.
 
 ### For additional details or modifications, feel free to update this README as needed.

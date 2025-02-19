@@ -3,9 +3,9 @@ import json
 from urllib.parse import quote
 from traceback import print_exc as tb
 from bs4 import BeautifulSoup
-import os
 import google.generativeai as genai
 from google.ai.generativelanguage_v1beta.types import content
+import time
 
 def safe_print_error(msg, e=None):
     print(f"[Error] {msg}")
@@ -187,7 +187,7 @@ def aggregate_metrics(metrics_list: list[dict]) -> dict:
             total_weight += weight
             weighted_sum += weight * score
     aggregated_score = weighted_sum / total_weight if total_weight else 0.0
-    return {"confidence": total_weight, "score": aggregated_score}
+    return {"confidence": total_weight, "score": aggregated_score, "timestamp": time.time()}
 
 def analyze_companies(companies: list[str]):
   all_company_data = {}
