@@ -1,4 +1,4 @@
-# OpenBoycott
+# OpenBoycott (in development)
 
 OpenBoycott is a Python project that analyzes companies (eg. Apple, Google, Microsoft, Meta) by evaluating how various issues — such as environmental impact, fair wages, and diversity & inclusion — are mentioned in related articles. The project leverages multiple APIs and AI tools including Google Custom Search, Financial Modeling Prep, and Google's Generative AI (Gemini). All APIs are completely free and only require you to make an account.
 
