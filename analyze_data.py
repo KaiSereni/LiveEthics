@@ -27,9 +27,9 @@ issues = {
     "QUEER": "LGBTQ support",
     "BIPOC": "BIPOC support",
     "PAY": "Fair wages",
-    "ENV": "Environmental impact",
-    "CHARITY": "Charitable causes",
-    "POLI": "Progressive political engagement"
+    "ENV": "Low environmental impact",
+    "CHARITY": "Charitable donations and support",
+    "POLI": "Progressive/leftist political engagement"
 }
 
 function_declarations = []
@@ -39,10 +39,11 @@ for issue_id in issues.keys():
       description=(
           "Given the article(s) in the prompt, indicate how strongly the article(s) relate to "
           f"{issues[issue_id]} in regard to the company defined in the prompt as COMPANY NAME. "
-          "This weight should be a value from 0-100, with 0 meaning it doesn't mention that issue at all, "
+          "This weight should be a value from 0-100, with 0 meaning it doesn't mention that issue in regards to the company at all, "
           "and 100 means that issue as it relates to the company is the only thing the article(s) talk about. "
           "Then, assign a score for that company from 1-100 in that category given the content of the article, "
-          "where 50 means a net-neutral impact. If the significance weight is 0, don't include the score."
+          "where 50 means a net-neutral impact, 100 means that the company is a world leader in the category,"
+          "and 0 means they're doing lasting, extensive damage. If the significance weight is 0, don't include the score."
       ),
       parameters=content.Schema(
         type=content.Type.OBJECT,
