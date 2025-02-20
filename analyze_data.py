@@ -153,7 +153,8 @@ def data_google(company_name: str):
                     if not link:
                         continue
                     article_response = requests.get(link, timeout=10)
-                    article_response.raise_for_status()
+                    if not article_response.ok:
+                        continue
                     text_response = extract_text_from_html(article_response.text)
                     if text_response:
                         url_list.append(text_response)
@@ -165,29 +166,27 @@ def data_google(company_name: str):
         responses[symbol] = url_list
     return responses
 
-def aggregate_metrics(metrics_list: list[dict]) -> dict:
-    total_weight = 0.0
-    weighted_sum = 0.0
-    for entry in metrics_list:
-        for value in entry.values():
-            try:
-                # Accept both list or string input
-                if isinstance(value, list) and len(value) >= 2:
-                    weight = float(value[0])
-                    score = float(value[1])
-                elif isinstance(value, str):
-                    weight_str, score_str = value.split(",")
-                    weight = float(weight_str.strip())
-                    score = float(score_str.strip())
-                else:
-                    continue
-            except Exception as e:
-                safe_print_error("Error parsing metric value", e)
+def aggregate_metrics(metrics_list: dict) -> dict:
+    
+    aggregated_metrics = {}
+    for company, articles in metrics_list.items():
+        company_metrics = {}
+        for article_data in articles:
+            for issue_id, data in article_data.items():
+                if issue_id not in company_metrics:
+                    company_metrics[issue_id] = []
+                company_metrics[issue_id].append(data)
+        for issue_id, data in company_metrics.items():
+            if not data:
                 continue
-            total_weight += weight
-            weighted_sum += weight * score
-    aggregated_score = weighted_sum / total_weight if total_weight else 0.0
-    return {"confidence": total_weight, "score": aggregated_score, "timestamp": time.time()}
+            total_weight = sum([x[0] for x in data])
+            total_score = sum([x[0] * x[1] for x in data])
+            final_score = total_score / total_weight if total_weight > 0 else 0
+            final_score = round(final_score, 3)
+            company_metrics[issue_id] = {"score": final_score, "confidence": total_weight, "date": time.time()}
+        aggregated_metrics[company] = company_metrics
+
+    return aggregated_metrics
 
 def analyze_companies(companies: list[str]):
   all_company_data = {}
@@ -213,13 +212,12 @@ def analyze_companies(companies: list[str]):
       chat_data = []
       for issue_id in issues.keys():
           issue_data = all_data.get(issue_id, [])
-          formatted_articles = [f"ARTICLE {i+1}: {article[:20000]}" for i, article in enumerate(issue_data)]
+          formatted_articles = [f"ARTICLE {i+1}: {article}" for i, article in enumerate(issue_data)]
           # Use formatted_articles if needed in the prompt. Otherwise using raw issue_data.
-          prompt = f"COMPANY NAME: {company}\nARTICLE(S): {issue_data}"
+          prompt = f"COMPANY NAME: {company}\nARTICLE(S): {formatted_articles}"
           chat_data.append(ask_about_article(prompt))
 
-      final_scores = aggregate_metrics(chat_data)
-      all_company_data[company] = final_scores
+      all_company_data[company] = aggregate_metrics(chat_data)
 
   return all_company_data
 
@@ -227,9 +225,14 @@ if __name__ == "__main__":
   companies = [
       "Apple",
       "Google",
-      "Microsoft",
-      "Meta"
+      "Meta",
+      "Shein",
+      "Tesla",
+      "Oufer Jewelry",
+      "Temu"
   ]
 
   final_data = analyze_companies(companies)
   print(final_data)
+  with open("output.json", "w") as f:
+      json.dump(final_data, f, indent=2)
