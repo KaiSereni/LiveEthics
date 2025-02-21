@@ -140,6 +140,7 @@ def data_google(company_name: str):
     base_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}"
     responses = {}
     for symbol, description in issues.items():
+        start_time = time.time()  # Start timer as soon as the iteration begins
         query = quote(f"{company_name} {description}")
         final_url = base_url.format(key=key, query=query)
         url_list = []
@@ -164,29 +165,32 @@ def data_google(company_name: str):
                     safe_print_error("Error fetching article content", e)
         except Exception as e:
             safe_print_error("Google API error", e)
+        # Wait until a full 1 second has passed since starting this request
+        elapsed = time.time() - start_time
+        if elapsed < 1:
+            time.sleep(1 - elapsed)
         responses[symbol] = url_list
     return responses
 
-def aggregate_metrics(metrics_list: dict) -> dict:
-    
+def aggregate_metrics(metrics_list: list) -> dict:
+    company_metrics = {}
+    for article_data in metrics_list:
+        for issue_id, data in article_data.items():
+            if issue_id not in company_metrics:
+                company_metrics[issue_id] = []
+            company_metrics[issue_id].append(data)
     aggregated_metrics = {}
-    for company, articles in metrics_list.items():
-        company_metrics = {}
-        for article_data in articles:
-            for issue_id, data in article_data.items():
-                if issue_id not in company_metrics:
-                    company_metrics[issue_id] = []
-                company_metrics[issue_id].append(data)
-        for issue_id, data in company_metrics.items():
-            if not data:
-                continue
-            total_weight = sum([x[0] for x in data])
-            total_score = sum([x[0] * x[1] for x in data])
-            final_score = total_score / total_weight if total_weight > 0 else 0
-            final_score = round(final_score, 3)
-            company_metrics[issue_id] = {"score": final_score, "confidence": total_weight, "date": time.time()}
-        aggregated_metrics[company] = company_metrics
-
+    for issue_id, data in company_metrics.items():
+        if not data:
+            continue
+        total_weight = sum(x[0] for x in data)
+        total_score = sum(x[0] * x[1] for x in data)
+        final_score = total_score / total_weight if total_weight > 0 else 0
+        aggregated_metrics[issue_id] = {
+            "score": round(final_score, 3),
+            "confidence": total_weight,
+            "date": int(time.time())
+        }
     return aggregated_metrics
 
 def analyze_companies(companies: list[str]):
