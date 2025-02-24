@@ -4,7 +4,6 @@ from urllib.parse import quote
 from traceback import print_exc as tb
 from bs4 import BeautifulSoup
 from google import genai
-from google.generativeai import protos
 from google.genai import types
 import time
 import re
@@ -35,50 +34,37 @@ issues = {
     "POLI": "Progressive or Democratic political engagement"
 }
 
-TEST_MODE = True  # Set to True to use mock data for API calls
+TEST_MODE = False  # Set to True to use mock data for API calls
 
-issues_funcs: list[protos.FunctionDeclaration] = []
+issues_funcs: list[types.FunctionDeclaration] = []
 
 for issue_id, issue_desc in issues.items():
-    issues_funcs.append(protos.FunctionDeclaration(
+    issues_funcs.append(types.FunctionDeclaration(
       name=f"{issue_id}_INDEX",
       description=(
           f"""Given the article(s) in the prompt, indicate how strongly the article(s) relate to \
-"{issue_desc}" in regard to the company defined in the prompt as COMPANY NAME. \
+\"{issue_desc}\" in regard to the company defined in the prompt as COMPANY NAME. \
 This weight should be a value from 0-100, with 0 meaning it doesn't mention that issue in regards to the company at all, \
 and 100 means that issue as it relates to the company is the only thing the article(s) talk about. \
-Then, score the company in the \"{issue_desc}\" category, from 1-100, given the content of the article, \
+Then, score the company in the \"{issue_desc}\" category, from 0-100, given the content of the article, \
 where 50 means a net-neutral impact, 100 means that the company is a world leader in the category, \
 and 0 means they're doing extensive, lasting damage. If the significance weight is 0, don't include the score."""
       ),
-      parameters=protos.Schema(
+      parameters=types.Schema(
         type="OBJECT",
         required=["significance"],
         properties={
-          "significance": protos.Schema(
+          "significance": types.Schema(
             type='NUMBER',
           ),
-          "score": protos.Schema(
+          "score": types.Schema(
             type='NUMBER',
           ),
         },
       ),
     ))
 
-issues_tool = types.Tool(function_declarations=[
-    types.FunctionDeclaration(
-        name="multiply",
-        description="Returns a * b.",
-        parameters=types.Schema(
-            properties={
-                'a': types.Schema(type='NUMBER'),
-                'b': types.Schema(type='NUMBER'),
-            },
-            type='OBJECT',
-        ),
-    )
-])
-
+issues_tool = types.Tool(function_declarations=issues_funcs)
 grounding_tool = types.Tool(google_search=types.GoogleSearch())
 
 def ask_about_article(input_text: str):
@@ -93,17 +79,17 @@ def ask_about_article(input_text: str):
     except Exception as e:
         tb()
         return {}
+    response_parts = json.loads(response.model_dump_json())["candidates"][0]["content"]["parts"]
     output = {}
-    try:
-        for part in response.candidates[0].content.parts:
+    for part in response_parts:
+        if "function_call" in part.keys():
             try:
-                data = json.loads(part.text)
-                for key, value in data.items():
-                    output[key] = value  # Expected format: {issue_id: [significance, score]}
-            except json.JSONDecodeError:
-                pass
-    except Exception as e:
-        tb()
+                output[part["function_call"]["name"].split("_")[0]] = [part["function_call"]["args"]["significance"], part["function_call"]["args"]["score"]]
+            except:
+                output[part["function_call"]["name"].split("_")[0]] = [part["function_call"]["args"]["significance"], 0]
+    if not output:
+        print("No output found")
+    print(output)
     return output
 
 def extract_text_from_html(html_string):
@@ -117,8 +103,8 @@ def extract_text_from_html(html_string):
 
 def get_test_fmp_data() -> dict:
     return {
-        "ENV": [0.8, 0.75],
-        "PAY": [0.5, 0.65]
+        "ENV": [80, 75],
+        "PAY": [50, 65]
     }
 
 def get_test_google_data(company_name: str) -> dict:
@@ -211,8 +197,8 @@ def data_fmp(symbol: str) -> dict:
             return {}
         data = json_data[0]
         output = {
-            "ENV": [1, data.get("environmentalScore", 0) / 100],
-            "PAY": [0.5, data.get("socialScore", 0) / 100]
+            "ENV": [100, data.get("environmentalScore", 0)],
+            "PAY": [50, data.get("socialScore", 0)]
         }
         return output
     except Exception as e:
@@ -270,7 +256,9 @@ def data_google(company_name: str) -> dict[str, list[float, float]]:
         response = ask_about_article(prompt)
         datasets.append({issue_id: response})
     
-    return aggregate_metrics(datasets)
+    print(f"Google datasets: {datasets}")
+    r = aggregate_metrics(datasets)
+    return r
 
 def data_grounded_gemini(company_name: str) -> dict[str, float]:
     print(f"Getting Gemini data for {company_name}...")
@@ -319,7 +307,7 @@ def ask_compeditors(company_name: str) -> list:
             model=model_id,
             contents=prompt,
             config=types.GenerateContentConfig(
-                response_modalities=["STRING"],
+                #response_modalities=["STRING"],
                 tools=[grounding_tool],
             )
         )

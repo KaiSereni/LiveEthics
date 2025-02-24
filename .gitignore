@@ -1,3 +1,4 @@
 keys.json
 .DS_Store
 output.json
+.venv/
