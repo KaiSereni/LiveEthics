@@ -3,23 +3,26 @@ import json
 from urllib.parse import quote
 from traceback import print_exc as tb
 from bs4 import BeautifulSoup
-import google.generativeai as genai
-from google.ai.generativelanguage_v1beta.types import content
+from google import genai
+from google.generativeai import protos
+from google.genai import types
 import time
+import re
 
-def safe_print_error(msg, e=None):
-    print(f"[Error] {msg}")
-    if e:
-        print(f"Details: {e}")
+def load_api_keys():
+    try:
+        with open("keys.json", "r") as f:
+            return json.load(f)
+    except Exception as e:
+        tb()
+        return {}
 
-# Create the model
-generation_config = {
-  "temperature": 0,
-  "top_p": 0.95, # high, 0-1
-  "top_k": 1, # low, 0-50
-  "max_output_tokens": 8192,
-  "response_mime_type": "text/plain",
-}
+# NEW: Initialize the client and model ID using the new syntax
+client = genai.Client(
+    api_key=load_api_keys()["gemini"],
+)
+
+model_id = "gemini-2.0-flash"
 
 issues = {
     "DEI_L": "DEI in leadership",
@@ -29,65 +32,78 @@ issues = {
     "PAY": "Fair wages",
     "ENV": "Low environmental impact",
     "CHARITY": "Charitable donations and support",
-    "POLI": "Progressive/leftist political engagement"
+    "POLI": "Progressive or Democratic political engagement"
 }
 
-function_declarations = []
-for issue_id in issues.keys():
-    function_declarations.append(genai.protos.FunctionDeclaration(
+TEST_MODE = 'true'  # Set to 'true' to use mock data for API calls
+
+issues_funcs: list[protos.FunctionDeclaration] = []
+
+for issue_id, issue_desc in issues.items():
+    issues_funcs.append(protos.FunctionDeclaration(
       name=f"{issue_id}_INDEX",
       description=(
-          "Given the article(s) in the prompt, indicate how strongly the article(s) relate to "
-          f"\"{issues[issue_id]}\" in regard to the company defined in the prompt as COMPANY NAME. "
-          "This weight should be a value from 0-100, with 0 meaning it doesn't mention that issue in regards to the company at all, "
-          "and 100 means that issue as it relates to the company is the only thing the article(s) talk about. "
-          f"Then, score the company in the \"{issues[issue_id]}\" category, from 1-100, given the content of the article, "
-          "where 50 means a net-neutral impact, 100 means that the company is a world leader in the category,"
-          "and 0 means they're doing lasting, extensive damage. If the significance weight is 0, don't include the score."
+          f"""Given the article(s) in the prompt, indicate how strongly the article(s) relate to \
+"{issue_desc}" in regard to the company defined in the prompt as COMPANY NAME. \
+This weight should be a value from 0-100, with 0 meaning it doesn't mention that issue in regards to the company at all, \
+and 100 means that issue as it relates to the company is the only thing the article(s) talk about. \
+Then, score the company in the \"{issue_desc}\" category, from 1-100, given the content of the article, \
+where 50 means a net-neutral impact, 100 means that the company is a world leader in the category, \
+and 0 means they're doing extensive, lasting damage. If the significance weight is 0, don't include the score."""
       ),
-      parameters=content.Schema(
-        type=content.Type.OBJECT,
-        enum=[],
+      parameters=protos.Schema(
+        type="OBJECT",
         required=["significance"],
         properties={
-          "significance": content.Schema(
-            type=content.Type.NUMBER,
+          "significance": protos.Schema(
+            type='NUMBER',
           ),
-          "score": content.Schema(
-            type=content.Type.NUMBER,
+          "score": protos.Schema(
+            type='NUMBER',
           ),
         },
       ),
     ))
 
-model = genai.GenerativeModel(
-  model_name="gemini-2.0-flash",
-  generation_config=generation_config,
-  tools=[
-    genai.protos.Tool(
-      function_declarations=function_declarations
-    ),
-  ],
-  tool_config={'function_calling_config': 'ANY'},
-)
+issues_tool = types.Tool(function_declarations=[
+    types.FunctionDeclaration(
+        name="multiply",
+        description="Returns a * b.",
+        parameters=types.Schema(
+            properties={
+                'a': types.Schema(type='NUMBER'),
+                'b': types.Schema(type='NUMBER'),
+            },
+            type='OBJECT',
+        ),
+    )
+])
+
+grounding_tool = types.Tool(google_search=types.GoogleSearch())
 
 def ask_about_article(input_text: str):
     try:
-        chat_session = model.start_chat()
-        response = chat_session.send_message(input_text)
+        response = client.models.generate_content(
+            model=model_id,
+            contents=input_text,
+            config=types.GenerateContentConfig(
+                tools=[issues_tool],
+            )
+        )
     except Exception as e:
-        safe_print_error("Chat session failed", e)
+        tb()
         return {}
     output = {}
     try:
-        for part in response.parts:
-            if fn := part.function_call:
-                output[fn.name.replace("_INDEX", "")] = [
-                    fn.args.get("significance", 0),
-                    fn.args.get("score", 0.0)
-                ]
+        for part in response.candidates[0].content.parts:
+            try:
+                data = json.loads(part.text)
+                for key, value in data.items():
+                    output[key] = value  # Expected format: {issue_id: [significance, score]}
+            except json.JSONDecodeError:
+                pass
     except Exception as e:
-        safe_print_error("Error processing chat response", e)
+        tb()
     return output
 
 def extract_text_from_html(html_string):
@@ -96,21 +112,92 @@ def extract_text_from_html(html_string):
         text = soup.get_text(separator='\n', strip=True)
         return text
     except Exception as e:
-        safe_print_error("Error parsing HTML", e)
+        tb()
         return ""
 
-def load_api_keys():
-    try:
-        with open("keys.json", "r") as f:
-            return json.load(f)
-    except Exception as e:
-        safe_print_error("Failed loading API keys", e)
-        return {}
+def get_test_fmp_data() -> dict:
+    return {
+        "ENV": [0.8, 0.75],
+        "PAY": [0.5, 0.65]
+    }
+
+def get_test_google_data(company_name: str) -> dict:
+    if company_name:
+        return {
+            "DEI_L": [50, 20],
+            "DEI_H": [60, 30],
+            "QUEER": [70, 40],
+            "BIPOC": [80, 50],
+            "PAY": [90, 60]
+        }
+    return {}
+
+def get_test_gemini_response(company_name: str) -> dict:
+    if company_name:
+        return {
+            "DEI_L": [50, 75],
+            "DEI_H": [50, 80],
+            "QUEER": [50, 70],
+            "BIPOC": [50, 65],
+            "PAY": [50, 60],
+            "ENV": [50, 85]
+        }
+    return {}
+
+def get_test_competitors(company_name: str) -> list:
+    test_competitors = {
+        "Apple": ["Samsung", "Microsoft", "Google"],
+        "Google": ["Microsoft", "Apple", "Amazon"],
+        "Meta": ["Twitter", "TikTok", "LinkedIn"]
+    }
+    return test_competitors.get(company_name, ["Competitor 1", "Competitor 2", "Competitor 3"])
+
+def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict:
+    aggregated_metrics = {}
+    
+    # Combine all metrics into a single structure
+    combined_metrics = {}
+    for metrics in metrics_list:
+        for issue_id, data in metrics.items():
+            if issue_id not in combined_metrics:
+                combined_metrics[issue_id] = []
+                
+            # Ensure data is in correct format [weight, score]
+            if isinstance(data, list) and len(data) == 2:
+                try:
+                    weight, score = float(data[0]), float(data[1])
+                    combined_metrics[issue_id].append([weight, score])
+                except (ValueError, TypeError):
+                    continue
+    
+    # Calculate weighted averages for each issue
+    for issue_id, data_points in combined_metrics.items():
+        if not data_points:
+            continue
+        
+        try:
+            total_weight = sum(point[0] for point in data_points)
+            if total_weight <= 0:
+                continue
+                
+            weighted_sum = sum(point[0] * point[1] for point in data_points)
+            final_score = weighted_sum / total_weight
+            
+            aggregated_metrics[issue_id] = {
+                "score": round(final_score, 3),
+                "confidence": round(total_weight, 3)
+            }
+        except (IndexError, TypeError):
+            continue
+    
+    return aggregated_metrics
 
 def data_fmp(symbol: str) -> dict:
+    if TEST_MODE:
+        return get_test_fmp_data()
     api_keys = load_api_keys()
     if "financialmodelingprep" not in api_keys:
-        safe_print_error("Financial Modeling Prep API key not found")
+        tb()
         return {}
     key = api_keys["financialmodelingprep"]
     url = f"https://financialmodelingprep.com/stable/esg-disclosures?symbol={symbol}&apikey={key}"
@@ -119,28 +206,31 @@ def data_fmp(symbol: str) -> dict:
         response.raise_for_status()
         json_data = response.json()
         if not json_data:
-            safe_print_error("No data received from FMP")
+            tb()
             return {}
         data = json_data[0]
         output = {
-            "ENV": [{"score": data.get("environmentalScore", 0) / 100, "weight": 0.8}],
-            "PAY": [{"score": data.get("socialScore", 0) / 100, "weight": 0.5}]
+            "ENV": [1, data.get("environmentalScore", 0) / 100],
+            "PAY": [0.5, data.get("socialScore", 0) / 100]
         }
         return output
     except Exception as e:
-        safe_print_error("Error fetching data from Financial Modeling Prep", e)
+        tb()
         return {}
 
-def data_google(company_name: str):
+def data_google(company_name: str) -> dict[str, list[float, float]]:
+    if TEST_MODE:
+        return get_test_google_data(company_name)
+    
     api_keys = load_api_keys()
-    if "google" not in api_keys:
-        safe_print_error("Google API key not found")
+    if "google" not in api_keys or "gemini" not in api_keys:
+        tb()
         return {}
     key = api_keys["google"]
     base_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}"
     responses = {}
-    for symbol, description in issues.items():
-        start_time = time.time()  # Start timer as soon as the iteration begins
+    for issue_id, description in issues.items():
+        start_time = time.time()
         query = quote(f"{company_name} {description}")
         final_url = base_url.format(key=key, query=query)
         url_list = []
@@ -162,82 +252,135 @@ def data_google(company_name: str):
                         url_list.append(text_response)
                 except Exception as e:
                     tb()
-                    safe_print_error("Error fetching article content", e)
         except Exception as e:
-            safe_print_error("Google API error", e)
-        # Wait until a full 1 second has passed since starting this request
+            tb()
         elapsed = time.time() - start_time
         if elapsed < 1:
             time.sleep(1 - elapsed)
-        responses[symbol] = url_list
-    return responses
-
-def aggregate_metrics(metrics_list: list) -> dict:
-    company_metrics = {}
-    for article_data in metrics_list:
-        for issue_id, data in article_data.items():
-            if issue_id not in company_metrics:
-                company_metrics[issue_id] = []
-            company_metrics[issue_id].append(data)
-    aggregated_metrics = {}
-    for issue_id, data in company_metrics.items():
-        if not data:
+        responses[issue_id] = url_list
+    
+    datasets = []
+    for issue_id, articles in responses.items():
+        if not articles:
             continue
-        total_weight = sum(x[0] for x in data)
-        total_score = sum(x[0] * x[1] for x in data)
-        final_score = total_score / total_weight if total_weight > 0 else 0
-        aggregated_metrics[issue_id] = {
-            "score": round(final_score, 3),
-            "confidence": total_weight,
-            "date": int(time.time())
-        }
-    return aggregated_metrics
+        formatted_articles = [f"ARTICLE {i+1}: {article}" for i, article in enumerate(articles)]
+        prompt = f"COMPANY NAME: {company_name}\nARTICLE(S): {' '.join(formatted_articles)}"
+        response = ask_about_article(prompt)
+        datasets.append({issue_id: response})
+    
+    return aggregate_metrics(datasets)
+
+def data_grounded_gemini(company_name: str) -> dict[str, float]:
+    if TEST_MODE:
+        return get_test_gemini_response(company_name)
+    
+    categoriesList = "{"
+    for id, desc in issues.items():
+        categoriesList += f'"{id}": "{desc}", '
+    try:
+        response = client.models.generate_content(
+            model=model_id,
+            contents=f"Research and score the company \"{company_name}\" in all the \
+specified categories you can find information on as described. \
+The score should be from 0 to 100, where 50 means no impact, 100 means that the company is a \
+world leader in the category, and 0 means they're doing extensive, lasting damage. \
+Your output should be a dict where the keys are the category IDs and the values are the scores. Wrap this dict in backticks. \
+categories: \n{categoriesList}" + "}",
+            config=types.GenerateContentConfig(
+                tools=[grounding_tool]
+            )
+        )
+        match: re.Match[str] = re.search(r'\{.*?\}', response.text, re.DOTALL)
+        json_str = match.group(0)
+        json_output = json.loads(json_str)
+        final_output = {}
+        for key, value in json_output.items():
+            final_output[key] = [50, value]
+        return final_output
+    except Exception as e:
+        tb()
+        return {}
+
+def ask_compeditors(company_name: str) -> list:
+    if TEST_MODE:
+        return get_test_competitors(company_name)
+    
+    try:
+        prompt = (
+            f"COMPANY NAME: {company_name}\n"
+            "Please list the major competitors of this company. For example, McDonald's competitors are Burger King, Wendy's, Chick-fil-A. "
+            "Return the answer as a comma-separated list."
+        )
+        response = client.models.generate_content(
+            model=model_id,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["STRING"],
+                tools=[grounding_tool],
+            )
+        )
+        compeditors_text = ""
+        for part in response.candidates[0].content.parts:
+            compeditors_text += part.text
+        compeditors = [c.strip() for c in compeditors_text.split(",") if c.strip()]
+        return compeditors
+    except Exception as e:
+        tb()
+        return []
 
 def analyze_companies(companies: list[str]):
-  all_company_data = {}
-  for company in companies:
-      print(f"Analyzing {company}...")
-      try:
-          # Configure keys for GEMINI
-          api_keys = load_api_keys()
-          if "gemini" not in api_keys:
-              safe_print_error("Gemini API key not found")
-          else:
-              genai.configure(api_key=api_keys["gemini"])
-      except Exception as e:
-          safe_print_error("Failed to configure Gemini API", e)
+    all_company_data = {}
+    for company in companies:
+        print(f"Analyzing {company}...")
+        try:
+            api_keys = load_api_keys()
+            if "gemini" not in api_keys:
+                tb()
+                continue
+        except Exception as e:
+            tb()
+            continue
 
-      google_data = data_google(company)
-      fmp_data = data_fmp("AAPL")
-      # print("Google data:", google_data)
-      # print("FMP data:", fmp_data)
-      all_data = {**google_data, **fmp_data}
-      # print("Combined data:", all_data)
+        # Get Google search data
+        google_data = data_google(company)
+        
+        # Get FMP data
+        fmp_data = data_fmp(company)
 
-      chat_data = []
-      for issue_id in issues.keys():
-          issue_data = all_data.get(issue_id, [])
-          formatted_articles = [f"ARTICLE {i+1}: {article}" for i, article in enumerate(issue_data)]
-          # Use formatted_articles if needed in the prompt. Otherwise using raw issue_data.
-          prompt = f"COMPANY NAME: {company}\nARTICLE(S): {formatted_articles}"
-          chat_data.append(ask_about_article(prompt))
+        # Get Gemini grounded data
+        gemini_response = data_grounded_gemini(company)
 
-      all_company_data[company] = aggregate_metrics(chat_data)
+        # Aggregate metrics
+        metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
+        
+        # Get competitors
+        competitors = ask_compeditors(company)
+        
+        # Store results
+        if metrics:
+            all_company_data[company] = {
+                "metrics": metrics,
+                "competitors": competitors,
+                "date": int(time.time())
+            }
 
-  return all_company_data
+    return all_company_data
 
 if __name__ == "__main__":
-  companies = [
-      "Apple",
-      "Google",
-      "Meta",
-      "Shein",
-      "Tesla",
-      "Oufer Jewelry",
-      "Temu"
-  ]
+    if TEST_MODE:
+        print("[TEST MODE ENABLED] Using mock data for API calls")
+    
+    companies = [
+        "Apple",
+        #   "Google",
+        #   "Meta",
+        #   "Shein",
+        #   "Tesla",
+        #   "Oufer Jewelry",
+        #   "Temu"
+    ]
 
-  final_data = analyze_companies(companies)
-  print(final_data)
-  with open("output.json", "w") as f:
-      json.dump(final_data, f, indent=2)
+    final_data = analyze_companies(companies)
+    print(final_data)
+    with open("output_b.json", "w") as f:
+        json.dump(final_data, f, indent=2)
