@@ -35,7 +35,7 @@ issues = {
     "POLI": "Progressive or Democratic political engagement"
 }
 
-TEST_MODE = 'true'  # Set to 'true' to use mock data for API calls
+TEST_MODE = True  # Set to True to use mock data for API calls
 
 issues_funcs: list[protos.FunctionDeclaration] = []
 
@@ -193,6 +193,7 @@ def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict
     return aggregated_metrics
 
 def data_fmp(symbol: str) -> dict:
+    print(f"Getting FMP data for {symbol}...")
     if TEST_MODE:
         return get_test_fmp_data()
     api_keys = load_api_keys()
@@ -219,6 +220,7 @@ def data_fmp(symbol: str) -> dict:
         return {}
 
 def data_google(company_name: str) -> dict[str, list[float, float]]:
+    print(f"Getting Google data for {company_name}...")
     if TEST_MODE:
         return get_test_google_data(company_name)
     
@@ -271,6 +273,7 @@ def data_google(company_name: str) -> dict[str, list[float, float]]:
     return aggregate_metrics(datasets)
 
 def data_grounded_gemini(company_name: str) -> dict[str, float]:
+    print(f"Getting Gemini data for {company_name}...")
     if TEST_MODE:
         return get_test_gemini_response(company_name)
     
@@ -302,6 +305,7 @@ categories: \n{categoriesList}" + "}",
         return {}
 
 def ask_compeditors(company_name: str) -> list:
+    print(f"Getting competitors for {company_name}...")
     if TEST_MODE:
         return get_test_competitors(company_name)
     
@@ -382,5 +386,5 @@ if __name__ == "__main__":
 
     final_data = analyze_companies(companies)
     print(final_data)
-    with open("output_b.json", "w") as f:
+    with open("output.json", "w") as f:
         json.dump(final_data, f, indent=2)
