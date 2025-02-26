@@ -357,7 +357,10 @@ def ask_compeditors(company_name: str) -> list:
                 )
             )
             compeditors_text = response.text
-            compeditors_text: str = re.search(r'`(.*?)`', response.text, re.DOTALL).group(1) 
+            matches = re.search(r'`(.*?)`', response.text, re.DOTALL)
+            if not matches:
+                return []
+            compeditors_text: str = matches.group(1) 
             compeditors = [c.strip().replace("\n", '') for c in compeditors_text.split(",") if c.strip().replace("\n", '')]
             return compeditors
             
