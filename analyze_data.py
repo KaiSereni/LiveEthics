@@ -4,9 +4,12 @@ from urllib.parse import quote
 from traceback import print_exc as tb
 from bs4 import BeautifulSoup
 from google import genai
+from google.genai.errors import ClientError
 from google.genai import types
+from google.genai.types import Part
 import time
 import re
+from google.genai.types import HttpOptions
 
 def load_api_keys():
     try:
@@ -18,7 +21,9 @@ def load_api_keys():
 
 # NEW: Initialize the client and model ID using the new syntax
 client = genai.Client(
-    api_key=load_api_keys()["gemini"],
+    vertexai=True,
+    project="openboycott",
+    location="us-central1"
 )
 
 model_id = "gemini-2.0-flash"
@@ -52,9 +57,9 @@ and 0 means they're doing extensive, lasting damage. If the significance weight 
       ),
       parameters=types.Schema(
         type="OBJECT",
-        required=["significance"],
+        required=["weight"],
         properties={
-          "significance": types.Schema(
+          "weight": types.Schema(
             type='NUMBER',
           ),
           "score": types.Schema(
@@ -64,8 +69,25 @@ and 0 means they're doing extensive, lasting damage. If the significance weight 
       ),
     ))
 
-issues_tool = types.Tool(function_declarations=issues_funcs)
+research_scoring_tool_funcs: list[types.FunctionDeclaration] = []
+for function in issues_funcs:
+    modified_function = function.model_copy()
+    this_issue_id = modified_function.name.replace("_INDEX", "")
+    modified_function.description = f"""\
+Regarding "{issues[this_issue_id]}", research score the company defined in the prompt, from 0-100, \
+where 50 means a net-neutral impact, 100 means \
+that the company is a world leader in the category, \
+and 0 means they're doing extensive, lasting damage. \
+Also assign a "weight" from 0-100 based on your confidence in this score. \
+If you found 10+ sources about the company regarding that issue, set the weight to 100.
+If you couldn't find any information about the company, set the score and weight to 0, \
+"""
+    research_scoring_tool_funcs.append(modified_function)
+
+issues_significance_tool = types.Tool(function_declarations=issues_funcs)
+research_and_scoring_tool = types.Tool(google_search=types.GoogleSearch(), function_declarations=issues_funcs)
 grounding_tool = types.Tool(google_search=types.GoogleSearch())
+research_scoring_tool = types.Tool(function_declarations=research_scoring_tool_funcs)
 
 def ask_about_article(input_text: str):
     try:
@@ -73,23 +95,28 @@ def ask_about_article(input_text: str):
             model=model_id,
             contents=input_text,
             config=types.GenerateContentConfig(
-                tools=[issues_tool],
+                tools=[issues_significance_tool],
+                temperature=0,
+                top_k=1,
+                top_p=0.1
             )
         )
     except Exception as e:
         tb()
         return {}
-    response_parts = json.loads(response.model_dump_json())["candidates"][0]["content"]["parts"]
+    response_parts = response.candidates[0].content.parts
     output = {}
     for part in response_parts:
-        if "function_call" in part.keys():
-            try:
-                output[part["function_call"]["name"].split("_")[0]] = [part["function_call"]["args"]["significance"], part["function_call"]["args"]["score"]]
-            except:
-                output[part["function_call"]["name"].split("_")[0]] = [part["function_call"]["args"]["significance"], 0]
+        if "function_call" in part.__dict__.keys():
+            if "score" in part.function_call.args.keys():
+                output[part.function_call.name.replace('_INDEX', '')] = [
+                    part.function_call.args["weight"],
+                    part.function_call.args["score"]
+                ]
+            else:
+                output[part.function_call.name.replace('_INDEX', '')] = [0, 0]
     if not output:
         print("No output found")
-    print(output)
     return output
 
 def extract_text_from_html(html_string):
@@ -138,11 +165,11 @@ def get_test_competitors(company_name: str) -> list:
     }
     return test_competitors.get(company_name, ["Competitor 1", "Competitor 2", "Competitor 3"])
 
-def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict:
+def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict[str, list[float, float]]:
     aggregated_metrics = {}
     
     # Combine all metrics into a single structure
-    combined_metrics = {}
+    combined_metrics: dict = {}
     for metrics in metrics_list:
         for issue_id, data in metrics.items():
             if issue_id not in combined_metrics:
@@ -169,10 +196,10 @@ def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict
             weighted_sum = sum(point[0] * point[1] for point in data_points)
             final_score = weighted_sum / total_weight
             
-            aggregated_metrics[issue_id] = {
-                "score": round(final_score, 3),
-                "confidence": round(total_weight, 3)
-            }
+            aggregated_metrics[issue_id] = [
+                round(total_weight, 3),
+                round(final_score, 3)
+            ]
         except (IndexError, TypeError):
             continue
     
@@ -206,7 +233,7 @@ def data_fmp(symbol: str) -> dict:
         return {}
 
 def data_google(company_name: str) -> dict[str, list[float, float]]:
-    print(f"Getting Google data for {company_name}...")
+    print(f"Googling {company_name}...")
     if TEST_MODE:
         return get_test_google_data(company_name)
     
@@ -254,41 +281,53 @@ def data_google(company_name: str) -> dict[str, list[float, float]]:
         formatted_articles = [f"ARTICLE {i+1}: {article}" for i, article in enumerate(articles)]
         prompt = f"COMPANY NAME: {company_name}\nARTICLE(S): {' '.join(formatted_articles)}"
         response = ask_about_article(prompt)
-        datasets.append({issue_id: response})
+        datasets.append(response)
     
     print(f"Google datasets: {datasets}")
     r = aggregate_metrics(datasets)
     return r
 
-def data_grounded_gemini(company_name: str) -> dict[str, float]:
+def data_grounded_gemini(company_name: str) -> dict[str, list[float, float]]:
     print(f"Getting Gemini data for {company_name}...")
     if TEST_MODE:
         return get_test_gemini_response(company_name)
     
-    categoriesList = "{"
+    categoriesList = ""
     for id, desc in issues.items():
         categoriesList += f'"{id}": "{desc}", '
     try:
         response = client.models.generate_content(
             model=model_id,
-            contents=f"Research and score the company \"{company_name}\" in all the \
-specified categories you can find information on as described. \
-The score should be from 0 to 100, where 50 means no impact, 100 means that the company is a \
-world leader in the category, and 0 means they're doing extensive, lasting damage. \
-Your output should be a dict where the keys are the category IDs and the values are the scores. Wrap this dict in backticks. \
-categories: \n{categoriesList}" + "}",
+            contents=f"""Research and score the company "{company_name}" in all the \
+specified categories you can find information. Then, return your confidence and score for each category in the functions. \
+categories:
+{categoriesList}""",
             config=types.GenerateContentConfig(
-                tools=[grounding_tool]
+                tools=[research_scoring_tool],
+                temperature=0,
+                top_k=1,
+                top_p=0.1
             )
-        )
-        match: re.Match[str] = re.search(r'\{.*?\}', response.text, re.DOTALL)
-        json_str = match.group(0)
-        json_output = json.loads(json_str)
+        )  
         final_output = {}
-        for key, value in json_output.items():
-            final_output[key] = [50, value]
+        response_parts = response.candidates[0].content.parts
+        for part in response_parts:
+            part: Part
+            if "function_call" in part.__dict__.keys():
+                try:
+                    if "score" in part.function_call.args.keys():
+                        final_output[part.function_call.name.replace('_INDEX', '')] = [
+                            part.function_call.name["weight"],
+                            part.function_call.name["score"]
+                        ]
+                    else:
+                        final_output[part.function_call.name.replace('_INDEX', '')] = [0, 0]
+                except KeyError:
+                    print(f"Warning: Missing expected keys in function call response: {part}")
+                    continue
         return final_output
     except Exception as e:
+        print(f"Error in data_grounded_gemini: {str(e)}")
         tb()
         return {}
 
@@ -297,28 +336,44 @@ def ask_compeditors(company_name: str) -> list:
     if TEST_MODE:
         return get_test_competitors(company_name)
     
-    try:
-        prompt = (
-            f"COMPANY NAME: {company_name}\n"
-            "Please list the major competitors of this company. For example, McDonald's competitors are Burger King, Wendy's, Chick-fil-A. "
-            "Return the answer as a comma-separated list."
-        )
-        response = client.models.generate_content(
-            model=model_id,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                #response_modalities=["STRING"],
-                tools=[grounding_tool],
+    max_retries = 5
+    base_delay = 3
+    
+    for attempt in range(max_retries):
+        try:
+            prompt = (
+                f"COMPANY NAME: {company_name}\n"
+                "Please list the major competitors of this company. For example, McDonald's competitors are Burger King, Wendy's, Chick-fil-A. "
+                "Return the answer as a comma-separated list, wrapped in single backticks."
             )
-        )
-        compeditors_text = ""
-        for part in response.candidates[0].content.parts:
-            compeditors_text += part.text
-        compeditors = [c.strip() for c in compeditors_text.split(",") if c.strip()]
-        return compeditors
-    except Exception as e:
-        tb()
-        return []
+            response = client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[grounding_tool],
+                    temperature=0,
+                    top_k=1,
+                    top_p=0.1
+                )
+            )
+            compeditors_text = response.text
+            compeditors_text: str = re.search(r'`(.*?)`', response.text, re.DOTALL).group(1) 
+            compeditors = [c.strip().replace("\n", '') for c in compeditors_text.split(",") if c.strip().replace("\n", '')]
+            return compeditors
+            
+        except ClientError as e:
+            if e.code == 429:  # Resource exhausted
+                if attempt < max_retries - 1:  # Don't sleep on the last attempt
+                    delay = base_delay + (attempt * 5)
+                    print(f"Resource exhausted. Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                    continue
+            raise  # Re-raise if not 429 or final attempt
+        except Exception as e:
+            tb()
+            return []
+    
+    return []  # Fallback if all retries failed
 
 def analyze_companies(companies: list[str]):
     all_company_data = {}
@@ -335,12 +390,15 @@ def analyze_companies(companies: list[str]):
 
         # Get Google search data
         google_data = data_google(company)
+        print(f"GOOGLE DATA: {google_data}")
         
         # Get FMP data
         fmp_data = data_fmp(company)
+        print(f"FMP DATA: {fmp_data}")
 
         # Get Gemini grounded data
         gemini_response = data_grounded_gemini(company)
+        print(f"GEMINI DATA: {gemini_response}")
 
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
@@ -363,12 +421,12 @@ if __name__ == "__main__":
         print("[TEST MODE ENABLED] Using mock data for API calls")
     
     companies = [
-        "Apple",
+        #   "Apple",
         #   "Google",
-        #   "Meta",
-        #   "Shein",
+        "Meta",
+        "Shein",
         #   "Tesla",
-        #   "Oufer Jewelry",
+        "Oufer Jewelry",
         #   "Temu"
     ]
 

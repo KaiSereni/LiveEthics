@@ -24,16 +24,19 @@ Create or update the keys.json file with your API keys. The file should have key
 
 - [Financial Modeling Prep](https://site.financialmodelingprep.com/developer/docs/company-esg-risk-ratings-api)
 - [Google search API](https://developers.google.com/custom-search/v1/overview) *note: the free version limits you to 100 queries per day
-- [Google Gemini API](https://aistudio.google.com/prompts)
 
 The file must follow this JSON structure:
 ```json
 {
     "financialmodelingprep": "YOUR_FMP_API_KEY",
     "google": "YOUR_GOOGLE_API_KEY",
-    "gemini": "YOUR_GEMINI_API_KEY"
 }
 ```
+
+You'll also need access to the Google Vertex AI API, and then login before running the script.
+`gcloud auth login`
+`gcloud config set project [PROJECT_NAME]`
+
 ## How It Works
 1. **Model Configuration**
     - The project sets up a GenerativeModel using Google's Gemeni AI. 
