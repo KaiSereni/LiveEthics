@@ -312,18 +312,18 @@ categories:
         final_output = {}
         response_parts = response.candidates[0].content.parts
         for part in response_parts:
-            part: Part
             if "function_call" in part.__dict__.keys():
                 try:
-                    if "score" in part.function_call.args.keys():
-                        final_output[part.function_call.name.replace('_INDEX', '')] = [
-                            part.function_call.name["weight"],
-                            part.function_call.name["score"]
+                    function_name = part.function_call.name.replace('_INDEX', '')
+                    if "score" in part.function_call.args:
+                        final_output[function_name] = [
+                            float(part.function_call.args["weight"]),
+                            float(part.function_call.args["score"])
                         ]
                     else:
-                        final_output[part.function_call.name.replace('_INDEX', '')] = [0, 0]
-                except KeyError:
-                    print(f"Warning: Missing expected keys in function call response: {part}")
+                        final_output[function_name] = [0.0, 0.0]
+                except (KeyError, ValueError) as e:
+                    print(f"Warning: Error processing function response: {e}")
                     continue
         return final_output
     except Exception as e:
@@ -343,7 +343,8 @@ def ask_compeditors(company_name: str) -> list:
         try:
             prompt = (
                 f"COMPANY NAME: {company_name}\n"
-                "Please list the major competitors of this company. For example, McDonald's competitors are Burger King, Wendy's, Chick-fil-A. "
+                "Please list up to 10 major competitors of this company, which are worth more than approximately $5M in market cap. \
+                If you don't have actual data, estimate. For example, McDonald's competitors are Burger King, Wendy's, Chick-fil-A. "
                 "Return the answer as a comma-separated list, wrapped in single backticks."
             )
             response = client.models.generate_content(
@@ -424,16 +425,17 @@ if __name__ == "__main__":
         print("[TEST MODE ENABLED] Using mock data for API calls")
     
     companies = [
-        #   "Apple",
-        #   "Google",
+        "Apple",
+        "Google",
         "Meta",
-        "Shein",
-        #   "Tesla",
-        "Oufer Jewelry",
-        #   "Temu"
+        "Tesla",
     ]
 
     final_data = analyze_companies(companies)
     print(final_data)
+    with open("output.json", "r") as f:
+        previous_data = json.load(f)
+        for company, obj_data in final_data.items():
+            previous_data[company] = obj_data
     with open("output.json", "w") as f:
-        json.dump(final_data, f, indent=2)
+        json.dump(previous_data, f, indent=2)
