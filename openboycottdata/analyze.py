@@ -1,15 +1,9 @@
-import requests
-import json
+import requests, json, time
 from urllib.parse import quote
 from traceback import print_exc as tb
 from bs4 import BeautifulSoup
 from google import genai
-from google.genai.errors import ClientError
-from google.genai import types
-from google.genai.types import Part
-import time
-import re
-from google.genai.types import HttpOptions
+from google.genai import errors, types
 
 issues = {
     "DEI_L": "DEI in leadership",
@@ -64,10 +58,63 @@ that the company is a world leader in the category, \
 and 0 means they're doing extensive, lasting damage. \
 Also assign a "weight" from 0-100 based on your confidence in this score. \
 If you found 10+ sources about the company regarding that issue, set the weight to 100.
-If you couldn't find any information about the company, set the score and weight to 0, \
+If you couldn't find any information about the company, set the score and weight to 0. \
 """
     research_scoring_tool_funcs.append(modified_function)
 
+research_competition_info_funcs = [
+    types.FunctionDeclaration(
+        name="list_competition",
+        description=""" \
+List 1-20 of the specified company's most valuable products, services, or properties. 
+For each product, list whether it's commonly available online, and whether it's commonly available in-person. \
+For example, Alphabet Co's search engine Google would be their most valuable property, which is available \
+online but not in-person. Apple's product iPhone would be their most valuable property, which is available for purchase both \
+online and in-person. Ebay's product Ebay.com would be their most valuable property, which is available online. \
+Exxon Mobil's most valuable product is their upstream oil operations, which is available in-person. \
+Additionally, for each product, name 1-10 competitor products in order of similarity. For example, Google's competitor \
+products would be Yahoo Search, DuckDuckGo, Bing, and Yandex. \
+""",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={
+                "products": types.Schema(
+                    type="ARRAY",
+                    items=types.Schema(
+                        type="OBJECT",
+                        required=["product_name"],
+                        properties={
+                            "product_name": types.Schema(type="STRING"),
+                            "competitor_products": types.Schema(
+                                type="ARRAY",
+                                description="List of the most similar alternative products",
+                                items=types.Schema(
+                                    type="OBJECT",
+                                    description="Product name and the company that owns it",
+                                    required=["product_name", "parent_company"],
+                                    properties={
+                                        "product_name": types.Schema(type="STRING"),
+                                        "parent_company": types.Schema(type="STRING"),
+                                    },
+                                ),
+                            ),
+                            "availability": types.Schema(
+                                type="OBJECT",
+                                description="Where this product is available",
+                                properties={
+                                    "online": types.Schema(type="BOOLEAN"),
+                                    "in_person": types.Schema(type="BOOLEAN"),
+                                },
+                            ),
+                        },
+                    ),
+                ),
+            },
+        ),
+    )
+]
+
+research_competition_info_tool = types.Tool(function_declarations=research_competition_info_funcs, google_search=types.GoogleSearch())
 issues_significance_tool = types.Tool(function_declarations=issues_funcs)
 research_and_scoring_tool = types.Tool(google_search=types.GoogleSearch(), function_declarations=issues_funcs)
 grounding_tool = types.Tool(google_search=types.GoogleSearch())
@@ -316,30 +363,29 @@ def ask_compeditors(company_name: str, gemini_client: genai.Client) -> list:
     for attempt in range(max_retries):
         try:
             prompt = (
-                f"COMPANY NAME: {company_name}\n"
-                "List 1-10 major competitors of this company, which are worth more than approximately $5M in market cap. \
-                If you don't have actual data, estimate. For example, McDonald's competitors are Burger King, Wendy's, Chick-fil-A. "
-                "Return the answer as a comma-separated list, wrapped in single backticks."
+                f"""\
+COMPANY NAME: {company_name}
+List information about the competition for this company's most valuable products or services and \
+compile any data you find in the list_competition function. This function must be called exactly once."""
             )
             response = gemini_client.models.generate_content(
                 model=model_id,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    tools=[grounding_tool],
+                    tools=[research_competition_info_tool],
+                    tool_config=types.FunctionCallingConfig(mode="any"),
                     temperature=0,
                     top_k=1,
                     top_p=0.1
                 )
             )
-            compeditors_text = response.text
-            matches = re.search(r'`(.*?)`', response.text, re.DOTALL)
-            if not matches:
-                return []
-            compeditors_text: str = matches.group(1) 
-            compeditors = [c.strip().replace("\n", '') for c in compeditors_text.split(",") if c.strip().replace("\n", '')]
+            if response.function_calls:
+                compeditors = response.function_calls[0].model_dump()
+            else:
+                compeditors = []
             return compeditors
             
-        except ClientError as e:
+        except errors.ClientError as e:
             if e.code == 429:  # Resource exhausted
                 if attempt < max_retries - 1:  # Don't sleep on the last attempt
                     delay = base_delay + (attempt * 5)

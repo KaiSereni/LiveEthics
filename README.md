@@ -71,3 +71,5 @@ with open("output.json", "w") as f:
     json.dump(previous_data, f, indent=2)
 
 ```
+
+### Can you code it better? [Branch us](https://github.com/KaiSereni/OpenBoycott) on GitHub!
