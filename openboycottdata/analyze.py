@@ -72,9 +72,10 @@ For example, Alphabet Co's search engine Google would be their most valuable pro
 online but not in-person. Apple's product iPhone would be their most valuable property, which is available for purchase both \
 online and in-person. Ebay's product Ebay.com would be their most valuable property, which is available online. \
 Exxon Mobil's most valuable product is their upstream oil operations, which is available in-person. \
+Lockheed Martin's most valuable product would be the F-35 Jet, which is available neither online nor in-person. \
 Additionally, for each product, name 1-10 competitor products in order of similarity. For example, Google's competitor \
 products would be Yahoo Search, DuckDuckGo, Bing, and Yandex. \
-Write the company's security name, without any class specifications and without any corporate suffixes such as LLC or Inc.
+Write the company's security name, without any class specifications and without any corporate suffixes such as LLC or Inc. \
 """,
         parameters=types.Schema(
             type="OBJECT",
