@@ -1,4 +1,4 @@
-import requests, json, time
+import requests, json, time, datetime
 from urllib.parse import quote
 from traceback import print_exc as tb
 from bs4 import BeautifulSoup
@@ -19,6 +19,28 @@ issues = {
 model_id = "gemini-2.0-flash"
 
 issues_funcs: list[types.FunctionDeclaration] = []
+
+def wait_until_4am(): # waits until the daily API limit resets
+    """Waits until 4:00 AM local time."""
+    print("Waiting until the Google Search API resets so that requests can be made for free")
+    while True:
+        now = datetime.datetime.now()
+        target_time = now.replace(hour=4, minute=0, second=0, microsecond=0)
+
+        if now >= target_time:
+            # If it's already past 4 AM today, wait until 4 AM tomorrow
+            if now.hour >= 4:
+              target_time += datetime.timedelta(days=1)
+            remaining_time = (target_time - now).total_seconds()
+            if remaining_time > 0:
+                time.sleep(remaining_time)
+            break
+        else:
+            # If it's before 4 AM, calculate the remaining time and sleep
+            remaining_time = (target_time - now).total_seconds()
+            if remaining_time > 0:
+                time.sleep(remaining_time)
+            break
 
 for issue_id, issue_desc in issues.items():
     issues_funcs.append(types.FunctionDeclaration(
@@ -358,8 +380,7 @@ def ask_compeditors(company_name: str, gemini_client: genai.Client, test_mode = 
     if test_mode:
         return get_test_competitors(company_name)
     
-    max_retries = 5
-    base_delay = 3
+    max_retries = 3
     
     for attempt in range(max_retries):
         try:
@@ -389,9 +410,7 @@ compile any data you find in the list_competition function. This function must b
         except errors.ClientError as e:
             if e.code == 429:  # Resource exhausted
                 if attempt < max_retries - 1:  # Don't sleep on the last attempt
-                    delay = base_delay + (attempt * 5)
-                    print(f"Resource exhausted. Retrying in {delay} seconds...")
-                    time.sleep(delay)
+                    wait_until_4am()
                     continue
             raise  # Re-raise if not 429 or final attempt
         except Exception as e:
@@ -453,7 +472,7 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
     return all_company_data
 
 if __name__ == "__main__":
-    TEST_MODE = True
+    TEST_MODE = False
 
     if TEST_MODE:
         print("[TEST MODE ENABLED] Using mock data for API calls")
