@@ -16,7 +16,6 @@ issues = {
     "POLI": "Progressive or Democratic political engagement"
 }
 
-TEST_MODE = False  # Set to True to use mock data for API calls
 model_id = "gemini-2.0-flash"
 
 issues_funcs: list[types.FunctionDeclaration] = []
@@ -238,9 +237,9 @@ def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict
     
     return aggregated_metrics
 
-def data_fmp(symbol: str, fmp_key: str) -> dict:
+def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
     print(f"Getting FMP data for {symbol}...")
-    if TEST_MODE:
+    if test_mode:
         return get_test_fmp_data()
     url = f"https://financialmodelingprep.com/stable/esg-disclosures?symbol={symbol}&apikey={fmp_key}"
     try:
@@ -260,9 +259,9 @@ def data_fmp(symbol: str, fmp_key: str) -> dict:
         tb()
         return {}
 
-def data_google(company_name: str, google_key: str, gemini_client: genai.Client) -> dict[str, list[float, float]]:
+def data_google(company_name: str, google_key: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float, float]]:
     print(f"Googling {company_name}...")
-    if TEST_MODE:
+    if test_mode:
         return get_test_google_data(company_name)
     
     base_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}"
@@ -310,9 +309,9 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client)
     r = aggregate_metrics(datasets)
     return r
 
-def data_grounded_gemini(company_name: str, gemini_client: genai.Client) -> dict[str, list[float, float]]:
+def data_grounded_gemini(company_name: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float, float]]:
     print(f"Getting Gemini data for {company_name}...")
-    if TEST_MODE:
+    if test_mode:
         return get_test_gemini_response(company_name)
     
     categoriesList = ""
@@ -354,9 +353,9 @@ categories:
         tb()
         return {}
 
-def ask_compeditors(company_name: str, gemini_client: genai.Client) -> list:
+def ask_compeditors(company_name: str, gemini_client: genai.Client, test_mode = False) -> list:
     print(f"Getting competitors for {company_name}...")
-    if TEST_MODE:
+    if test_mode:
         return get_test_competitors(company_name)
     
     max_retries = 5
@@ -401,7 +400,7 @@ compile any data you find in the list_competition function. This function must b
     
     return []  # Fallback if all retries failed
 
-def analyze_companies(companies: list[str], keys: dict[str, str]):
+def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=False):
     gemini_client = genai.Client(
         vertexai=True,
         project=keys["vertexai_project_name"],
@@ -413,22 +412,22 @@ def analyze_companies(companies: list[str], keys: dict[str, str]):
         print(f"Analyzing {company}...")
 
         # Get Google search data
-        google_data = data_google(company, keys["google"], gemini_client)
+        google_data = data_google(company, keys["google"], gemini_client, test_mode=test_mode)
         print(f"GOOGLE DATA: {google_data}")
         
         # Get FMP data
-        fmp_data = data_fmp(company, keys["financialmodelingprep"])
+        fmp_data = data_fmp(company, keys["financialmodelingprep"], test_mode=test_mode)
         print(f"FMP DATA: {fmp_data}")
 
         # Get Gemini grounded data
-        gemini_response = data_grounded_gemini(company, gemini_client)
+        gemini_response = data_grounded_gemini(company, gemini_client, test_mode=test_mode)
         print(f"GEMINI DATA: {gemini_response}")
 
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
         
         # Get competitors
-        competitors = ask_compeditors(company, gemini_client)
+        competitors = ask_compeditors(company, gemini_client, test_mode=test_mode)
         
         # Store results
         if metrics:
@@ -441,6 +440,8 @@ def analyze_companies(companies: list[str], keys: dict[str, str]):
     return all_company_data
 
 if __name__ == "__main__":
+    TEST_MODE = True
+
     if TEST_MODE:
         print("[TEST MODE ENABLED] Using mock data for API calls")
     
@@ -453,16 +454,17 @@ if __name__ == "__main__":
     with open("keys.json", "r") as f:
         keys = json.load(f)
 
-    final_data = analyze_companies(companies, keys)
+    final_data = analyze_companies(companies, keys, test_mode=TEST_MODE)
     print(final_data)
 
-    try:
-        with open("output.json", "r") as f:
-            previous_data = json.load(f)
-            for company, obj_data in final_data.items():
-                previous_data[company] = obj_data
-    except:
-        previous_data = {}
-        
-    with open("output.json", "w") as f:
-        json.dump(previous_data, f, indent=2)
+    if not TEST_MODE:
+        try:
+            with open("output.json", "r") as f:
+                previous_data = json.load(f)
+                for company, obj_data in final_data.items():
+                    previous_data[company] = obj_data
+        except:
+            previous_data = {}
+            
+        with open("output.json", "w") as f:
+            json.dump(previous_data, f, indent=2)
