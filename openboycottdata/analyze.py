@@ -156,7 +156,6 @@ def ask_about_article(input_text: str, gemini_client: genai.Client):
             )
         )
     except Exception as e:
-        tb()
         return {}
     response_parts = response.candidates[0].content.parts
     output = {}
@@ -266,11 +265,7 @@ def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
     url = f"https://financialmodelingprep.com/stable/esg-disclosures?symbol={symbol}&apikey={fmp_key}"
     try:
         response = requests.get(url, timeout=10)
-        response.raise_for_status()
         json_data = response.json()
-        if not json_data:
-            tb()
-            return {}
         data = json_data[0]
         output = {
             "ENV": [100, data.get("environmentalScore", 0)],
@@ -278,7 +273,6 @@ def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
         }
         return output
     except Exception as e:
-        tb()
         return {}
 
 def data_google(company_name: str, google_key: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float, float]]:
@@ -293,26 +287,29 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         query = quote(f"{company_name} {description}")
         final_url = base_url.format(key=google_key, query=query)
         url_list = []
-        try:
-            r = requests.get(final_url, timeout=10)
-            r.raise_for_status()
-            result = r.json()
-            result_items = result.get("items", [])
-            for item in result_items:
-                try:
-                    link = item.get("link")
-                    if not link:
-                        continue
-                    article_response = requests.get(link, timeout=10)
-                    if not article_response.ok:
-                        continue
-                    text_response = extract_text_from_html(article_response.text)
-                    if text_response:
-                        url_list.append(text_response)
-                except Exception as e:
-                    tb()
-        except Exception as e:
-            tb()
+        max_retries = 2
+        for _ in range(max_retries):
+            try:
+                r = requests.get(final_url, timeout=10)
+                result = r.json()
+                result_items = result["items"]
+                print(f"Found {result_items.__len__()} Google sources for {company_name}")
+                for item in result_items:
+                    try:
+                        link = item.get("link")
+                        if not link:
+                            continue
+                        article_response = requests.get(link, timeout=10)
+                        if not article_response.ok:
+                            continue
+                        text_response = extract_text_from_html(article_response.text)
+                        if text_response:
+                            url_list.append(text_response)
+                    except Exception as e:
+                        tb()
+            except:
+                wait_until_4am()
+                    
         elapsed = time.time() - start_time
         if elapsed < 1:
             time.sleep(1 - elapsed)
