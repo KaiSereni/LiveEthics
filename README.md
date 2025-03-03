@@ -45,7 +45,7 @@ gcloud config set project [PROJECT_NAME]
 
 Here's an example:
 ```py
-from openboycottdata import analyze_companies
+from openboycottdata.analyze import analyze_companies
 
 companies = [
     "Apple",
