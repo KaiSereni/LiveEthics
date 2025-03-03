@@ -401,22 +401,35 @@ compile any data you find in the list_competition function. This function must b
     return []  # Fallback if all retries failed
 
 def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=False):
-    gemini_client = genai.Client(
-        vertexai=True,
-        project=keys["vertexai_project_name"],
-        location="us-central1"
-    )
+    if "vertexai_project_name" in keys.keys():
+        gemini_client = genai.Client(
+            vertexai=True,
+            project=keys["vertexai_project_name"],
+            location="us-central1"
+        )
+    else:
+        gemini_client = None
 
     all_company_data = {}
     for company in companies:
         print(f"Analyzing {company}...")
 
         # Get Google search data
-        google_data = data_google(company, keys["google"], gemini_client, test_mode=test_mode)
+        if "google" in keys.keys():
+            google_key = keys["google"]
+        else:
+            google_key = ""
+
+        google_data = data_google(company, google_key, gemini_client, test_mode=test_mode)
         print(f"GOOGLE DATA: {google_data}")
         
         # Get FMP data
-        fmp_data = data_fmp(company, keys["financialmodelingprep"], test_mode=test_mode)
+        if "financialmodelingprep" in keys.keys():
+            fmp_key = keys["financialmodelingprep"]
+        else:
+            fmp_key = ""
+
+        fmp_data = data_fmp(company, fmp_key, test_mode=test_mode)
         print(f"FMP DATA: {fmp_data}")
 
         # Get Gemini grounded data
