@@ -1,5 +1,5 @@
 [project]
-name = "openboycott-data"
+name = "openboycottdata"
 version = "1.0.1"
 description = "A package for company ethics data aggregation."
 authors = [

@@ -16,7 +16,7 @@ This is a Python project that analyzes companies (eg. Apple, Google, Microsoft, 
    Install the package using:
    
    ```
-   pip install git+https://github.com/KaiSereni/OpenBoycott#egg=openboycott-data
+   pip install git+https://github.com/KaiSereni/OpenBoycott#egg=openboycottdata
    ```
 2. **API Keys**
 
@@ -45,7 +45,7 @@ gcloud config set project [PROJECT_NAME]
 
 Here's an example:
 ```py
-from openboycott-data import analyze_companies
+from openboycottdata import analyze_companies
 
 companies = [
     "Apple",
