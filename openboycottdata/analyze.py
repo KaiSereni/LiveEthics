@@ -327,7 +327,6 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         response = ask_about_article(prompt, gemini_client)
         datasets.append(response)
     
-    print(f"Google datasets: {datasets}")
     r = aggregate_metrics(datasets)
     return r
 
@@ -440,7 +439,7 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
             google_key = ""
 
         google_data = data_google(company, google_key, gemini_client, test_mode=test_mode)
-        print(f"GOOGLE DATA: {google_data}")
+        # print(f"GOOGLE DATA: {google_data}")
         
         # Get FMP data
         if "financialmodelingprep" in keys.keys():
@@ -449,11 +448,11 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
             fmp_key = ""
 
         fmp_data = data_fmp(company, fmp_key, test_mode=test_mode)
-        print(f"FMP DATA: {fmp_data}")
+        # print(f"FMP DATA: {fmp_data}")
 
         # Get Gemini grounded data
         gemini_response = data_grounded_gemini(company, gemini_client, test_mode=test_mode)
-        print(f"GEMINI DATA: {gemini_response}")
+        # print(f"GEMINI DATA: {gemini_response}")
 
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
