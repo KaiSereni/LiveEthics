@@ -11,23 +11,6 @@ import time
 import re
 from google.genai.types import HttpOptions
 
-def load_api_keys():
-    try:
-        with open("keys.json", "r") as f:
-            return json.load(f)
-    except Exception as e:
-        tb()
-        return {}
-
-# NEW: Initialize the client and model ID using the new syntax
-client = genai.Client(
-    vertexai=True,
-    project="openboycott",
-    location="us-central1"
-)
-
-model_id = "gemini-2.0-flash"
-
 issues = {
     "DEI_L": "DEI in leadership",
     "DEI_H": "DEI in hiring",
@@ -40,6 +23,7 @@ issues = {
 }
 
 TEST_MODE = False  # Set to True to use mock data for API calls
+model_id = "gemini-2.0-flash"
 
 issues_funcs: list[types.FunctionDeclaration] = []
 
@@ -89,9 +73,9 @@ research_and_scoring_tool = types.Tool(google_search=types.GoogleSearch(), funct
 grounding_tool = types.Tool(google_search=types.GoogleSearch())
 research_scoring_tool = types.Tool(function_declarations=research_scoring_tool_funcs)
 
-def ask_about_article(input_text: str):
+def ask_about_article(input_text: str, gemini_client: genai.Client):
     try:
-        response = client.models.generate_content(
+        response = gemini_client.models.generate_content(
             model=model_id,
             contents=input_text,
             config=types.GenerateContentConfig(
@@ -205,16 +189,11 @@ def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict
     
     return aggregated_metrics
 
-def data_fmp(symbol: str) -> dict:
+def data_fmp(symbol: str, fmp_key: str) -> dict:
     print(f"Getting FMP data for {symbol}...")
     if TEST_MODE:
         return get_test_fmp_data()
-    api_keys = load_api_keys()
-    if "financialmodelingprep" not in api_keys:
-        tb()
-        return {}
-    key = api_keys["financialmodelingprep"]
-    url = f"https://financialmodelingprep.com/stable/esg-disclosures?symbol={symbol}&apikey={key}"
+    url = f"https://financialmodelingprep.com/stable/esg-disclosures?symbol={symbol}&apikey={fmp_key}"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -232,22 +211,17 @@ def data_fmp(symbol: str) -> dict:
         tb()
         return {}
 
-def data_google(company_name: str) -> dict[str, list[float, float]]:
+def data_google(company_name: str, google_key: str, gemini_client: genai.Client) -> dict[str, list[float, float]]:
     print(f"Googling {company_name}...")
     if TEST_MODE:
         return get_test_google_data(company_name)
     
-    api_keys = load_api_keys()
-    if "google" not in api_keys or "gemini" not in api_keys:
-        tb()
-        return {}
-    key = api_keys["google"]
     base_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}"
     responses = {}
     for issue_id, description in issues.items():
         start_time = time.time()
         query = quote(f"{company_name} {description}")
-        final_url = base_url.format(key=key, query=query)
+        final_url = base_url.format(key=google_key, query=query)
         url_list = []
         try:
             r = requests.get(final_url, timeout=10)
@@ -280,14 +254,14 @@ def data_google(company_name: str) -> dict[str, list[float, float]]:
             continue
         formatted_articles = [f"ARTICLE {i+1}: {article}" for i, article in enumerate(articles)]
         prompt = f"COMPANY NAME: {company_name}\nARTICLE(S): {' '.join(formatted_articles)}"
-        response = ask_about_article(prompt)
+        response = ask_about_article(prompt, gemini_client)
         datasets.append(response)
     
     print(f"Google datasets: {datasets}")
     r = aggregate_metrics(datasets)
     return r
 
-def data_grounded_gemini(company_name: str) -> dict[str, list[float, float]]:
+def data_grounded_gemini(company_name: str, gemini_client: genai.Client) -> dict[str, list[float, float]]:
     print(f"Getting Gemini data for {company_name}...")
     if TEST_MODE:
         return get_test_gemini_response(company_name)
@@ -296,7 +270,7 @@ def data_grounded_gemini(company_name: str) -> dict[str, list[float, float]]:
     for id, desc in issues.items():
         categoriesList += f'"{id}": "{desc}", '
     try:
-        response = client.models.generate_content(
+        response = gemini_client.models.generate_content(
             model=model_id,
             contents=f"""Research and score the company "{company_name}" in all the \
 specified categories you can find information. Then, return your confidence and score for each category in the functions. \
@@ -331,7 +305,7 @@ categories:
         tb()
         return {}
 
-def ask_compeditors(company_name: str) -> list:
+def ask_compeditors(company_name: str, gemini_client: genai.Client) -> list:
     print(f"Getting competitors for {company_name}...")
     if TEST_MODE:
         return get_test_competitors(company_name)
@@ -343,11 +317,11 @@ def ask_compeditors(company_name: str) -> list:
         try:
             prompt = (
                 f"COMPANY NAME: {company_name}\n"
-                "Please list up to 10 major competitors of this company, which are worth more than approximately $5M in market cap. \
+                "List 1-10 major competitors of this company, which are worth more than approximately $5M in market cap. \
                 If you don't have actual data, estimate. For example, McDonald's competitors are Burger King, Wendy's, Chick-fil-A. "
                 "Return the answer as a comma-separated list, wrapped in single backticks."
             )
-            response = client.models.generate_content(
+            response = gemini_client.models.generate_content(
                 model=model_id,
                 contents=prompt,
                 config=types.GenerateContentConfig(
@@ -379,36 +353,34 @@ def ask_compeditors(company_name: str) -> list:
     
     return []  # Fallback if all retries failed
 
-def analyze_companies(companies: list[str]):
+def analyze_companies(companies: list[str], keys: dict[str, str]):
+    gemini_client = genai.Client(
+        vertexai=True,
+        project=keys["vertexai_project_name"],
+        location="us-central1"
+    )
+
     all_company_data = {}
     for company in companies:
         print(f"Analyzing {company}...")
-        try:
-            api_keys = load_api_keys()
-            if "gemini" not in api_keys:
-                tb()
-                continue
-        except Exception as e:
-            tb()
-            continue
 
         # Get Google search data
-        google_data = data_google(company)
+        google_data = data_google(company, keys["google"], gemini_client)
         print(f"GOOGLE DATA: {google_data}")
         
         # Get FMP data
-        fmp_data = data_fmp(company)
+        fmp_data = data_fmp(company, keys["financialmodelingprep"])
         print(f"FMP DATA: {fmp_data}")
 
         # Get Gemini grounded data
-        gemini_response = data_grounded_gemini(company)
+        gemini_response = data_grounded_gemini(company, gemini_client)
         print(f"GEMINI DATA: {gemini_response}")
 
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
         
         # Get competitors
-        competitors = ask_compeditors(company)
+        competitors = ask_compeditors(company, gemini_client)
         
         # Store results
         if metrics:
@@ -426,16 +398,23 @@ if __name__ == "__main__":
     
     companies = [
         "Apple",
-        "Google",
-        "Meta",
         "Tesla",
+        "Temu"
     ]
 
-    final_data = analyze_companies(companies)
+    with open("keys.json", "r") as f:
+        keys = json.load(f)
+
+    final_data = analyze_companies(companies, keys)
     print(final_data)
-    with open("output.json", "r") as f:
-        previous_data = json.load(f)
-        for company, obj_data in final_data.items():
-            previous_data[company] = obj_data
+
+    try:
+        with open("output.json", "r") as f:
+            previous_data = json.load(f)
+            for company, obj_data in final_data.items():
+                previous_data[company] = obj_data
+    except:
+        previous_data = {}
+        
     with open("output.json", "w") as f:
         json.dump(previous_data, f, indent=2)

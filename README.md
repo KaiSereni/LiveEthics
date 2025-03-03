@@ -1,6 +1,6 @@
-# OpenBoycott (in development)
+# OpenBoycott Data Aggregation Algorithm
 
-OpenBoycott is a Python project that analyzes companies (eg. Apple, Google, Microsoft, Meta) by evaluating how various issues — such as environmental impact, fair wages, and diversity & inclusion — are mentioned in related articles. The project leverages multiple APIs and AI tools including Google Custom Search, Financial Modeling Prep, and Google's Generative AI (Gemini). All APIs are completely free and only require you to make an account.
+This is a Python project that analyzes companies (eg. Apple, Google, Microsoft, Meta) by evaluating how various issues — such as environmental impact, fair wages, and diversity & inclusion — are mentioned in related articles. The project leverages multiple APIs and AI tools including Google Custom Search, Financial Modeling Prep, and Google's Generative AI (Gemini). All APIs are completely free at the time of writing and only require you to make an account.
 
 ## Features
 
@@ -11,12 +11,12 @@ OpenBoycott is a Python project that analyzes companies (eg. Apple, Google, Micr
 
 ## Setup
 
-1. **Install Dependencies**
+1. **Install Package**
 
-   Install the required packages using:
+   Install the package using:
    
-   ```sh
-   pip install -r requirements.txt
+   ```
+   pip install git+https://github.com/KaiSereni/OpenBoycott#egg=openboycott-data
    ```
 2. **API Keys**
 
@@ -24,35 +24,50 @@ Create or update the keys.json file with your API keys. The file should have key
 
 - [Financial Modeling Prep](https://site.financialmodelingprep.com/developer/docs/company-esg-risk-ratings-api)
 - [Google search API](https://developers.google.com/custom-search/v1/overview) *note: the free version limits you to 100 queries per day
+- [Google Vertex AI](https://console.cloud.google.com/vertex-ai/studio/chat)
 
 The file must follow this JSON structure:
 ```json
 {
     "financialmodelingprep": "YOUR_FMP_API_KEY",
     "google": "YOUR_GOOGLE_API_KEY",
+    "vertexai_project_name": "YOUR_VERTEXAI_PROJECT_NAME"
 }
 ```
+3. **Vertex AI Auth**
 
-You'll also need access to the Google Vertex AI API, and then login before running the script.
-`gcloud auth login`
-`gcloud config set project [PROJECT_NAME]`
+You'll authenticate with Google Vertex AI, and then login before running your script.
+```
+gcloud auth login
+gcloud config set project [PROJECT_NAME]
+```
+4. **Call the function**
 
-## How It Works
-1. **Model Configuration**
-    - The project sets up a GenerativeModel using Google's Gemeni AI. 
-    - It configures function declarations for various issues based on a predetermined list.
+Here's an example:
+```py
+from openboycott-data import analyze_companies
 
-2. **Data Collection**
-    - data_google: Searches for articles related to each issue using Google Custom Search.
-    - data_fmp: Fetches ESG scores from Financial Modeling Prep using the provided symbol.
-    - Processing:
-    The ask_about_article function sends the article content to the AI model to get scores and significance values. These values are then aggregated to generate a final score per company.
+companies = [
+    "Apple",
+    "Tesla",
+    "Temu"
+]
 
-3. **Execution**
-    - Running the analyze_data.py script will perform analysis for each company, combining data from both APIs, and output the scores to the terminal.
+with open("keys.json", "r") as f:
+    keys = json.load(f)
 
-4. **Running the Project**
-    - To execute the analysis, run `python analyze_data.py`.
-    Watch the console output for analysis progress and final scores.
+final_data = analyze_companies(companies, keys)
+print(final_data)
 
-### For additional details or modifications, feel free to update this README as needed.
+try:
+    with open("output.json", "r") as f:
+        previous_data = json.load(f)
+        for company, obj_data in final_data.items():
+            previous_data[company] = obj_data
+except:
+    previous_data = {}
+
+with open("output.json", "w") as f:
+    json.dump(previous_data, f, indent=2)
+
+```
