@@ -74,6 +74,7 @@ online and in-person. Ebay's product Ebay.com would be their most valuable prope
 Exxon Mobil's most valuable product is their upstream oil operations, which is available in-person. \
 Additionally, for each product, name 1-10 competitor products in order of similarity. For example, Google's competitor \
 products would be Yahoo Search, DuckDuckGo, Bing, and Yandex. \
+Write the company's security name, without any class specifications and without any corporate suffixes such as LLC or Inc.
 """,
         parameters=types.Schema(
             type="OBJECT",
