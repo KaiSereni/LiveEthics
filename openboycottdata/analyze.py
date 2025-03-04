@@ -1,4 +1,4 @@
-import requests, json, time, datetime
+import requests, json, time, datetime, re
 from urllib.parse import quote
 from traceback import print_exc as tb
 from bs4 import BeautifulSoup
@@ -11,14 +11,19 @@ issues = {
     "QUEER": "LGBTQ support",
     "BIPOC": "BIPOC support",
     "PAY": "Fair wages",
-    "ENV": "Low environmental impact",
-    "CHARITY": "Charitable donations and support",
-    "POLI": "Progressive or Democratic political engagement"
+    "ENV": "Environmental impact",
+    "CHARITY": "Charitable donations",
+    "POLI": "Progressive political engagement"
 }
 
 model_id = "gemini-2.0-flash"
 
 issues_funcs: list[types.FunctionDeclaration] = []
+
+def string_standard_formatting(string: str):
+    string = string.lower().strip()
+    string = re.sub(r'[^a-z0-9]', '', string)
+    return string
 
 def wait_until_4am(): # waits until the daily API limit resets
     """Waits until 4:00 AM local time."""
@@ -405,8 +410,9 @@ compile any data you find in the list_competition function. This function must b
             
         except errors.ClientError as e:
             if e.code == 429:  # Resource exhausted
+                print(e.message)
                 if attempt < max_retries - 1:  # Don't sleep on the last attempt
-                    wait_until_4am()
+                    time.sleep(20)
                     continue
             raise  # Re-raise if not 429 or final attempt
         except Exception as e:
@@ -459,8 +465,9 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
         
         # Store results
         if metrics:
-            all_company_data[company] = {
+            all_company_data[string_standard_formatting(company)] = {
                 "metrics": metrics,
+                "full_name": company,
                 "competitors": competitors,
                 "date": int(time.time())
             }
@@ -475,8 +482,8 @@ if __name__ == "__main__":
     
     companies = [
         "Apple",
-        "Tesla",
-        "Temu"
+        # "Tesla",
+        # "Temu"
     ]
 
     with open("keys.json", "r") as f:
