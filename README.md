@@ -72,4 +72,4 @@ with open("output.json", "w") as f:
 
 ```
 
-### Can you code it better? [Branch us](https://github.com/KaiSereni/OpenBoycott) on GitHub!
+### Can you code it better? [Branch us](https://github.com/KaiSereni/OpenBoycott/branches) on GitHub!
