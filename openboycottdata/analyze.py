@@ -317,6 +317,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 assert 'items' in result.keys() and len(result['items']) > 0
             except AssertionError:
                 print(f"No result items for {company_name} {description}")
+                break
             result_items = result["items"]
             print(f"Found {result_items.__len__()} Google sources for {company_name}")
             for item in result_items:
