@@ -285,37 +285,34 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
     if test_mode:
         return get_test_google_data(company_name)
     
-    base_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}"
+    base_googapi_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}"
     responses = {}
     for issue_id, description in issues.items():
         start_time = time.time()
         query = quote(f"{company_name} {description}")
-        final_url = base_url.format(key=google_key, query=query)
+        final_googapi_url = base_googapi_url.format(key=google_key, query=query)
         article_content_list = []
         link_list = []
         max_retries = 2
         for _ in range(max_retries):
-            try:
-                r = requests.get(final_url, timeout=10)
-                result = r.json()
-                result_items = result["items"]
-                print(f"Found {result_items.__len__()} Google sources for {company_name}")
-                for item in result_items:
-                    try:
-                        link = item.get("link")
-                        if not link:
-                            continue
-                        link_list.append(link)
-                        article_response = requests.get(link, timeout=10)
-                        if not article_response.ok:
-                            continue
-                        text_response = extract_text_from_html(article_response.text)
-                        if text_response:
-                            article_content_list.append(text_response)
-                    except Exception as e:
-                        tb()
-            except:
+            r = requests.get(final_googapi_url, timeout=10)
+            if not r.ok:
                 wait_until_4am()
+                continue
+            result = r.json()
+            result_items = result["items"]
+            print(f"Found {result_items.__len__()} Google sources for {company_name}")
+            for item in result_items:
+                link = item.get("link")
+                if not link:
+                    continue
+                link_list.append(link)
+                article_response = requests.get(link, timeout=10)
+                if not article_response.ok:
+                    continue
+                text_response = extract_text_from_html(article_response.text)
+                if text_response:
+                    article_content_list.append(text_response)
                     
         elapsed = time.time() - start_time
         if elapsed < 1:
