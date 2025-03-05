@@ -285,7 +285,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
     if test_mode:
         return get_test_google_data(company_name)
     
-    base_googapi_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}&num=15"
+    base_googapi_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}"
     # Custom search API, filtered for only credible news sources.
 
     responses = {}
