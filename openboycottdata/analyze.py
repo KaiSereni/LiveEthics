@@ -291,7 +291,8 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         start_time = time.time()
         query = quote(f"{company_name} {description}")
         final_url = base_url.format(key=google_key, query=query)
-        url_list = []
+        article_content_list = []
+        link_list = []
         max_retries = 2
         for _ in range(max_retries):
             try:
@@ -304,12 +305,13 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                         link = item.get("link")
                         if not link:
                             continue
+                        link_list.append(link)
                         article_response = requests.get(link, timeout=10)
                         if not article_response.ok:
                             continue
                         text_response = extract_text_from_html(article_response.text)
                         if text_response:
-                            url_list.append(text_response)
+                            article_content_list.append(text_response)
                     except Exception as e:
                         tb()
             except:
@@ -318,7 +320,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         elapsed = time.time() - start_time
         if elapsed < 1:
             time.sleep(1 - elapsed)
-        responses[issue_id] = url_list
+        responses[issue_id] = article_content_list
     
     datasets = []
     for issue_id, articles in responses.items():
@@ -329,8 +331,12 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         response = ask_about_article(prompt, gemini_client)
         datasets.append(response)
     
-    r = aggregate_metrics(datasets)
-    return r
+    final_metrics = aggregate_metrics(datasets)
+
+    return {
+        "data": final_metrics,
+        "sources": link_list
+    }
 
 def data_grounded_gemini(company_name: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float, float]]:
     print(f"Getting Gemini data for {company_name}...")
@@ -442,7 +448,6 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
             google_key = ""
 
         google_data = data_google(company, google_key, gemini_client, test_mode=test_mode)
-        # print(f"GOOGLE DATA: {google_data}")
         
         # Get FMP data
         if "financialmodelingprep" in keys.keys():
@@ -451,11 +456,9 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
             fmp_key = ""
 
         fmp_data = data_fmp(company, fmp_key, test_mode=test_mode)
-        # print(f"FMP DATA: {fmp_data}")
 
         # Get Gemini grounded data
         gemini_response = data_grounded_gemini(company, gemini_client, test_mode=test_mode)
-        # print(f"GEMINI DATA: {gemini_response}")
 
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
