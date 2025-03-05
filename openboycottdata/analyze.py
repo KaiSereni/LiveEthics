@@ -314,7 +314,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
             if "error" in result:
                 print(f"Result: {result}")
             try:
-                assert 'items' in result and len(result['items']) > 0
+                assert 'items' in result.items() and len(result['items']) > 0
             except AssertionError:
                 print(f"No result items for {company_name} {description}")
             result_items = result["items"]
