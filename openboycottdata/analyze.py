@@ -297,13 +297,13 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         for _ in range(max_retries):
             r = requests.get(final_googapi_url, timeout=10)
             if not r.ok:
-                wait_until_4am()
+                print(f"Request to Google API failed: {r.status_code}")
                 continue
             result = r.json()
             try:
                 result_items = result["items"]
             except KeyError:
-                print(f"Result items: {result_items}")
+                print(f"Result doesn't have items: {result}")
                 wait_until_4am()
                 continue
             print(f"Found {result_items.__len__()} Google sources for {company_name}")
