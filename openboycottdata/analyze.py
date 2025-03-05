@@ -309,6 +309,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
             try:
                 result_items = result["items"]
             except KeyError:
+                print(f"Result: {result}")
                 if "error" in result:
                     wait_until_4am()
                     break
