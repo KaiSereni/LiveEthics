@@ -308,6 +308,9 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 tb()
                 continue
             if not r.ok:
+                if r.status_code == 429:
+                    wait_until_4am()
+                    continue
                 print(f"Request to Google API failed: {r.text}")
                 continue
             result = r.json()
