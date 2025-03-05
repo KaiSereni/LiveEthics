@@ -269,7 +269,7 @@ def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
         return get_test_fmp_data()
     url = f"https://financialmodelingprep.com/stable/esg-disclosures?symbol={symbol}&apikey={fmp_key}"
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=30)
         json_data = response.json()
         data = json_data[0]
         output = {
@@ -295,7 +295,13 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         link_list = []
         max_retries = 2
         for _ in range(max_retries):
-            r = requests.get(final_googapi_url, timeout=10)
+            try:
+                r = requests.get(final_googapi_url, timeout=30)
+            except requests.exceptions.ReadTimeout:
+                continue
+            except Exception as e:
+                tb()
+                continue
             if not r.ok:
                 print(f"Request to Google API failed: {r.status_code}")
                 continue
@@ -303,7 +309,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
             try:
                 result_items = result["items"]
             except KeyError:
-                print(f"Result doesn't have items")
+                print(f"No results for {company_name} {description}")
                 break
             print(f"Found {result_items.__len__()} Google sources for {company_name}")
             for item in result_items:
@@ -311,9 +317,12 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 if not link:
                     continue
                 link_list.append(link)
-                article_response = requests.get(link, timeout=10)
-                if not article_response.ok:
-                    continue
+                try:
+                    article_response = requests.get(link, timeout=100)
+                    assert article_response.ok
+                except:
+                    print(f"Couldn't get article for {description}")
+                    break
                 text_response = extract_text_from_html(article_response.text)
                 if text_response:
                     article_content_list.append(text_response)
