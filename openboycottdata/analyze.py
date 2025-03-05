@@ -313,6 +313,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 text_response = extract_text_from_html(article_response.text)
                 if text_response:
                     article_content_list.append(text_response)
+            break
                     
         elapsed = time.time() - start_time
         if elapsed < 1:
