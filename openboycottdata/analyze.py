@@ -285,7 +285,9 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
     if test_mode:
         return get_test_google_data(company_name)
     
-    base_googapi_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}"
+    base_googapi_url = "https://www.googleapis.com/customsearch/v1?key={key}&cx=c1bd8c831439c48db&q={query}&num=15"
+    # Custom search API, filtered for only credible news sources.
+
     responses = {}
     for issue_id, description in issues.items():
         start_time = time.time()
@@ -306,7 +308,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 print(f"Request to Google API failed: {r.status_code}")
                 continue
             result = r.json()
-            if not 'totalResults' in result:
+            if not 'totalResults' in result.keys():
                 print(f"API unavailable: {result}")
                 wait_until_4am()
             if result['totalResults'] == '0':
