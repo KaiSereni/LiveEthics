@@ -296,7 +296,10 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         article_content_list = []
         link_list = []
         max_retries = 2
-        for _ in range(max_retries):
+        for i in range(max_retries):
+            if i != 0:
+                print("Waiting before reloading")
+                time.sleep(20)
             try:
                 r = requests.get(final_googapi_url, timeout=30)
             except requests.exceptions.ReadTimeout:
@@ -305,7 +308,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 tb()
                 continue
             if not r.ok:
-                print(f"Request to Google API failed: {r.status_code}")
+                print(f"Request to Google API failed: {r.text}")
                 continue
             result = r.json()
             if not 'totalResults' in result.keys():
