@@ -325,8 +325,11 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 try:
                     article_response = requests.get(link, timeout=100)
                     assert article_response.ok
+                except AssertionError:
+                    print(f"Couldn't get article for {company_name} {description}")
+                    print(f"Response: {article_response.text}")
                 except:
-                    print(f"Couldn't get article for {description}")
+                    print(f"Couldn't get article for {company_name} {description}")
                     break
                 text_response = extract_text_from_html(article_response.text)
                 if text_response:
