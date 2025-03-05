@@ -309,6 +309,9 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
             try:
                 result_items = result["items"]
             except KeyError:
+                if "error" in result:
+                    wait_until_4am()
+                    break
                 print(f"No results for {company_name} {description}")
                 break
             print(f"Found {result_items.__len__()} Google sources for {company_name}")
