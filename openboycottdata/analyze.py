@@ -307,7 +307,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 continue
             result = r.json()
             if not 'totalResults' in result:
-                print(f"API unavailable")
+                print(f"API unavailable: {result}")
                 wait_until_4am()
             if result['totalResults'] == '0':
                 print(f"No results for {company_name} {description}")
