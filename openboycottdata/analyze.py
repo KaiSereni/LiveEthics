@@ -181,8 +181,6 @@ def ask_about_article(input_text: str, gemini_client: genai.Client):
     response_parts = response.candidates[0].content.parts
     output = {}
     for part in response_parts:
-        print(f"part model dump: {part.model_dump()}")
-        print(f"part model dump keys: {part.model_dump().keys()}")
         if "function_call" in part.model_dump().keys():
             if "score" in part.function_call.args.keys():
                 output[part.function_call.name.replace('_INDEX', '')] = [
@@ -499,6 +497,7 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
             google_key = ""
 
         google_data = data_google(company, google_key, gemini_client, test_mode=test_mode)
+        print(f"Google data: {google_data}")
         
         # Get FMP data
         if "financialmodelingprep" in keys.keys():
@@ -507,9 +506,11 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
             fmp_key = ""
 
         fmp_data = data_fmp(company, fmp_key, test_mode=test_mode)
+        print(f"FMP data: {fmp_data}")
 
         # Get Gemini grounded data
         gemini_response = data_grounded_gemini(company, gemini_client, test_mode=test_mode)
+        print(f"Gemini data: {gemini_response}")
 
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
