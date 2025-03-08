@@ -181,7 +181,7 @@ def ask_about_article(input_text: str, gemini_client: genai.Client):
     response_parts = response.candidates[0].content.parts
     output = {}
     for part in response_parts:
-        if "function_call" in part.model_dump().keys():
+        if "function_call" in part.model_dump().keys() and "args" in part.function_call.model_dump().keys():
             if "score" in part.function_call.args.keys():
                 output[part.function_call.name.replace('_INDEX', '')] = [
                     part.function_call.args["weight"],
@@ -243,39 +243,33 @@ def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict
     aggregated_metrics = {}
     
     # Combine all metrics into a single structure
-    combined_metrics: dict = {}
+    combined_metrics: dict[str, list[list[float, float]]] = {}
     for metrics in metrics_list:
         for issue_id, data in metrics.items():
             if issue_id not in combined_metrics:
                 combined_metrics[issue_id] = []
                 
             # Ensure data is in correct format [weight, score]
-            if isinstance(data, list) and len(data) == 2:
-                try:
-                    weight, score = float(data[0]), float(data[1])
-                    combined_metrics[issue_id].append([weight, score])
-                except (ValueError, TypeError):
-                    continue
+            assert isinstance(data, list) and len(data) == 2
+            weight, score = float(data[0]), float(data[1])
+            combined_metrics[issue_id].append([weight, score])
     
     # Calculate weighted averages for each issue
     for issue_id, data_points in combined_metrics.items():
         if not data_points:
             continue
         
-        try:
-            total_weight = sum(point[0] for point in data_points)
-            if total_weight <= 0:
-                continue
-                
-            weighted_sum = sum(point[0] * point[1] for point in data_points)
-            final_score = weighted_sum / total_weight
-            
-            aggregated_metrics[issue_id] = [
-                round(total_weight, 3),
-                round(final_score, 3)
-            ]
-        except (IndexError, TypeError):
+        total_weight = sum(point[0] for point in data_points)
+        if total_weight <= 0:
             continue
+            
+        weighted_sum = sum(point[0] * point[1] for point in data_points)
+        final_score = weighted_sum / total_weight
+        
+        aggregated_metrics[issue_id] = [
+            round(total_weight, 3),
+            round(final_score, 3)
+        ]
     
     return aggregated_metrics
 
@@ -459,7 +453,7 @@ compile any data you find in the list_competition function. This function must b
                 )
             )
             if response.function_calls:
-                compeditors = response.function_calls[0].model_dump()
+                compeditors = response.function_calls[0].args
             else:
                 compeditors = []
             return compeditors
