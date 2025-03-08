@@ -239,18 +239,19 @@ def get_test_competitors(company_name: str) -> list:
     }
     return test_competitors.get(company_name, ["Competitor 1", "Competitor 2", "Competitor 3"])
 
-def aggregate_metrics(metrics_list: list[dict[str, list[float, float]]]) -> dict[str, list[float, float]]:
+def aggregate_metrics(metrics_list: list[dict[str, list[float]]]) -> dict[str, list[float]]:
     aggregated_metrics = {}
     
     # Combine all metrics into a single structure
-    combined_metrics: dict[str, list[list[float, float]]] = {}
+    combined_metrics: dict[str, list[list[float]]] = {}
     for metrics in metrics_list:
         for issue_id, data in metrics.items():
             if issue_id not in combined_metrics:
                 combined_metrics[issue_id] = []
                 
             # Ensure data is in correct format [weight, score]
-            assert isinstance(data, list) and len(data) == 2
+            if not (isinstance(data, list) and len(data) == 2):
+                continue
             weight, score = float(data[0]), float(data[1])
             combined_metrics[issue_id].append([weight, score])
     
@@ -290,7 +291,7 @@ def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
     except Exception as e:
         return {}
 
-def data_google(company_name: str, google_key: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float, float]]:
+def data_google(company_name: str, google_key: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float]]:
     print(f"Googling {company_name}...")
     if test_mode:
         return get_test_google_data(company_name)
@@ -372,7 +373,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         "sources": link_list
     }
 
-def data_grounded_gemini(company_name: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float, float]]:
+def data_grounded_gemini(company_name: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float]]:
     print(f"Getting Gemini data for {company_name}...")
     if test_mode:
         return get_test_gemini_response(company_name)
@@ -526,7 +527,7 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
     return all_company_data
 
 if __name__ == "__main__":
-    TEST_MODE = False
+    TEST_MODE = True
 
     if TEST_MODE:
         print("[TEST MODE ENABLED] Using mock data for API calls")
