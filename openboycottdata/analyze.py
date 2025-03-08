@@ -347,7 +347,8 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 text_response = extract_text_from_html(article_response.text)
                 if text_response:
                     article_content_list.append(text_response)
-            print(f"Couldn't get {failed_articles} out of {result_items.__len__()} for {description}")
+            if failed_articles > 0:
+                print(f"Couldn't get {failed_articles} out of {result_items.__len__()} for {description}")
             break
                     
         elapsed = time.time() - start_time
