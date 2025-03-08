@@ -149,23 +149,41 @@ grounding_tool = types.Tool(google_search=types.GoogleSearch())
 research_scoring_tool = types.Tool(function_declarations=research_scoring_tool_funcs)
 
 def ask_about_article(input_text: str, gemini_client: genai.Client):
-    try:
-        response = gemini_client.models.generate_content(
-            model=model_id,
-            contents=input_text,
-            config=types.GenerateContentConfig(
-                tools=[issues_significance_tool],
-                temperature=0,
-                top_k=1,
-                top_p=0.1
+    for attempt in range(5):
+        try:
+            response = gemini_client.models.generate_content(
+                model=model_id,
+                contents=input_text,
+                config=types.GenerateContentConfig(
+                    tools=[issues_significance_tool],
+                    temperature=0,
+                    top_k=1,
+                    top_p=0.1
+                )
             )
-        )
-    except Exception as e:
-        return {}
+        except errors.ClientError as e:
+            if not e.code == 429:
+                raise
+            if attempt == 4:
+                print(f"FATAL: 429 error final retry, returning empty dict")
+                return {}
+            cooldown = attempt*300 + 60
+            print(f"429 client error, retrying in {cooldown} seconds")
+            time.sleep(cooldown)
+            continue
+        except Exception as e:
+            if attempt == 4:
+                tb()
+                print(f"FATAL: gemini error final retry, returning empty dict")
+                return {}
+            print(f"Error in data_grounded_gemini: {str(e)}")
+            continue
     response_parts = response.candidates[0].content.parts
     output = {}
     for part in response_parts:
-        if "function_call" in part.__dict__.keys():
+        print(f"part model dump: {part.model_dump()}")
+        print(f"part model dump keys: {part.model_dump().keys()}")
+        if "function_call" in part.model_dump().keys():
             if "score" in part.function_call.args.keys():
                 output[part.function_call.name.replace('_INDEX', '')] = [
                     part.function_call.args["weight"],
@@ -333,7 +351,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                     assert article_response.ok
                 except AssertionError:
                     print(f"Couldn't get article at {link}")
-                    break
+                    continue
                 text_response = extract_text_from_html(article_response.text)
                 if text_response:
                     article_content_list.append(text_response)
@@ -368,50 +386,62 @@ def data_grounded_gemini(company_name: str, gemini_client: genai.Client, test_mo
     categoriesList = ""
     for id, desc in issues.items():
         categoriesList += f'"{id}": "{desc}", '
-    try:
-        response = gemini_client.models.generate_content(
-            model=model_id,
-            contents=f"""Research and score the company "{company_name}" in all the \
-specified categories you can find information. Then, return your confidence and score for each category in the functions. \
-categories:
-{categoriesList}""",
-            config=types.GenerateContentConfig(
-                tools=[research_scoring_tool],
-                temperature=0,
-                top_k=1,
-                top_p=0.1
+    for attempt in range(5):
+        try:
+            response = gemini_client.models.generate_content(
+                model=model_id,
+                contents=f"""Research and score the company "{company_name}" in all the \
+    specified categories you can find information. Then, return your confidence and score for each category in the functions. \
+    categories:
+    {categoriesList}""",
+                config=types.GenerateContentConfig(
+                    tools=[research_scoring_tool],
+                    temperature=0,
+                    top_k=1,
+                    top_p=0.1
+                )
             )
-        )  
-        final_output = {}
-        response_parts = response.candidates[0].content.parts
-        for part in response_parts:
-            if "function_call" in part.__dict__.keys():
-                try:
-                    function_name = part.function_call.name.replace('_INDEX', '')
-                    if "score" in part.function_call.args:
-                        final_output[function_name] = [
-                            float(part.function_call.args["weight"]),
-                            float(part.function_call.args["score"])
-                        ]
-                    else:
-                        final_output[function_name] = [0.0, 0.0]
-                except (KeyError, ValueError) as e:
-                    print(f"Warning: Error processing function response: {e}")
-                    continue
-        return final_output
-    except Exception as e:
-        print(f"Error in data_grounded_gemini: {str(e)}")
-        tb()
-        return {}
+            final_output = {}
+            response_parts = response.candidates[0].content.parts
+            for part in response_parts:
+                if "function_call" in part.model_dump().keys():
+                    try:
+                        function_name = part.function_call.name.replace('_INDEX', '')
+                        if "score" in part.function_call.args:
+                            final_output[function_name] = [
+                                float(part.function_call.args["weight"]),
+                                float(part.function_call.args["score"])
+                            ]
+                        else:
+                            final_output[function_name] = [0.0, 0.0]
+                    except (KeyError, ValueError) as e:
+                        print(f"Warning: Error processing function response: {e}")
+                        break
+            return final_output
+        except errors.ClientError as e:
+            if not e.code == 429:
+                raise
+            if attempt == 4:
+                print(f"FATAL: 429 error final retry, returning empty dict")
+                return {}
+            cooldown = attempt*300 + 60
+            print(f"429 client error, retrying in {cooldown} seconds")
+            time.sleep(cooldown)
+            continue
+        except Exception as e:
+            if attempt == 4:
+                tb()
+                print(f"FATAL: gemini error final retry, returning empty dict")
+                return {}
+            print(f"Error in data_grounded_gemini: {str(e)}")
+            continue
 
 def ask_compeditors(company_name: str, gemini_client: genai.Client, test_mode = False) -> list:
     print(f"Getting competitors for {company_name}...")
     if test_mode:
         return get_test_competitors(company_name)
     
-    max_retries = 3
-    
-    for attempt in range(max_retries):
+    for attempt in range(5):
         try:
             prompt = (
                 f"""\
@@ -439,13 +469,12 @@ compile any data you find in the list_competition function. This function must b
         except errors.ClientError as e:
             if e.code == 429:  # Resource exhausted
                 print(e.message)
-                if attempt < max_retries - 1:  # Don't sleep on the last attempt
-                    time.sleep(20)
+                if attempt < 5 - 1:  # Don't sleep on the last attempt
+                    time.sleep(300 * attempt + 60)
                     continue
             raise  # Re-raise if not 429 or final attempt
         except Exception as e:
             tb()
-            return []
     
     return []  # Fallback if all retries failed
 
