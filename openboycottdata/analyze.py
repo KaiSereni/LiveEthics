@@ -179,16 +179,21 @@ def ask_about_article(input_text: str, gemini_client: genai.Client):
             print(f"Error in data_grounded_gemini: {str(e)}")
             continue
     response_parts = response.candidates[0].content.parts
+    print(f"Response parts: {response.candidates[0].content.model_dump()}")
     output = {}
     for part in response_parts:
-        if "function_call" in part.model_dump().keys() and "args" in part.function_call.model_dump().keys():
-            if "score" in part.function_call.args.keys():
-                output[part.function_call.name.replace('_INDEX', '')] = [
-                    part.function_call.args["weight"],
-                    part.function_call.args["score"]
-                ]
-            else:
-                output[part.function_call.name.replace('_INDEX', '')] = [0, 0]
+        try:
+            assert "function_call" in part.model_dump().keys() 
+            assert "args" in part.function_call.model_dump().keys()
+        except AssertionError:
+            continue
+        if "score" in part.function_call.args.keys():
+            output[part.function_call.name.replace('_INDEX', '')] = [
+                part.function_call.args["weight"],
+                part.function_call.args["score"]
+            ]
+        else:
+            output[part.function_call.name.replace('_INDEX', '')] = [0, 0]
     if not output:
         print("No output found")
     return output
@@ -211,11 +216,14 @@ def get_test_fmp_data() -> dict:
 def get_test_google_data(company_name: str) -> dict:
     if company_name:
         return {
-            "DEI_L": [50, 20],
-            "DEI_H": [60, 30],
-            "QUEER": [70, 40],
-            "BIPOC": [80, 50],
-            "PAY": [90, 60]
+            "data": {
+                "DEI_L": [50, 20],
+                "DEI_H": [60, 30],
+                "QUEER": [70, 40],
+                "BIPOC": [80, 50],
+                "PAY": [90, 60]
+            },
+            "sources": []
         }
     return {}
 
@@ -291,7 +299,7 @@ def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
     except Exception as e:
         return {}
 
-def data_google(company_name: str, google_key: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float]]:
+def data_google(company_name: str, google_key: str, gemini_client: genai.Client, test_mode=False) -> dict[str, dict[str, list[float]]]:
     print(f"Googling {company_name}...")
     if test_mode:
         return get_test_google_data(company_name)
@@ -333,7 +341,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 print(f"No result items for {company_name} {description}")
                 break
             result_items = result["items"]
-            print(f"Found {result_items.__len__()} Google sources for {company_name}")
+            print(f"Found {result_items.__len__()} Google sources for {company_name} {issue_desc}")
             failed_articles = 0
             for item in result_items:
                 link = item.get("link")
@@ -473,6 +481,11 @@ compile any data you find in the list_competition function. This function must b
     
     return []  # Fallback if all retries failed
 
+def sum_weights(data: dict[str, list[float]]) -> float:
+    return sum([
+        metric_data[0] for metric_data in data.values()
+    ])
+
 def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=False):
     if "vertexai_project_name" in keys.keys():
         gemini_client = genai.Client(
@@ -493,8 +506,11 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
         else:
             google_key = ""
 
-        google_data = data_google(company, google_key, gemini_client, test_mode=test_mode)
-        print(f"Google data: {google_data}")
+        unformatted_google_data = data_google(company, google_key, gemini_client, test_mode=test_mode)
+        google_data = unformatted_google_data['data']
+        sources = unformatted_google_data['sources']
+
+        print(f"Google data total: {sum_weights(google_data)}")
         
         # Get FMP data
         if "financialmodelingprep" in keys.keys():
@@ -503,11 +519,11 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
             fmp_key = ""
 
         fmp_data = data_fmp(company, fmp_key, test_mode=test_mode)
-        print(f"FMP data: {fmp_data}")
+        print(f"FMP data total: {sum_weights(fmp_data)}")
 
         # Get Gemini grounded data
         gemini_response = data_grounded_gemini(company, gemini_client, test_mode=test_mode)
-        print(f"Gemini data: {gemini_response}")
+        print(f"Gemini data total: {sum_weights(gemini_response)}")
 
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
@@ -521,13 +537,14 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
                 "metrics": metrics,
                 "full_name": company,
                 "competitors": competitors,
+                "sources": sources,
                 "date": int(time.time())
             }
 
     return all_company_data
 
 if __name__ == "__main__":
-    TEST_MODE = True
+    TEST_MODE = False
 
     if TEST_MODE:
         print("[TEST MODE ENABLED] Using mock data for API calls")
@@ -542,8 +559,6 @@ if __name__ == "__main__":
         keys = json.load(f)
 
     final_data = analyze_companies(companies, keys, test_mode=TEST_MODE)
-    print(final_data)
-
     if not TEST_MODE:
         try:
             with open("output.json", "r") as f:
@@ -555,3 +570,6 @@ if __name__ == "__main__":
             
         with open("output.json", "w") as f:
             json.dump(previous_data, f, indent=2)
+    else:
+        print(f"\n\nFinal data: {final_data}")
+
