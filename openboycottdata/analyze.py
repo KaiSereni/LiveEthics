@@ -179,13 +179,12 @@ def ask_about_article(input_text: str, gemini_client: genai.Client):
             print(f"Error in data_grounded_gemini: {str(e)}")
             continue
     response_parts = response.candidates[0].content.parts
-    print(f"Response parts: {response.candidates[0].content.model_dump()}")
     output = {}
     for part in response_parts:
         try:
             assert "function_call" in part.model_dump().keys() 
             assert "args" in part.function_call.model_dump().keys()
-        except AssertionError:
+        except:
             continue
         if "score" in part.function_call.args.keys():
             output[part.function_call.name.replace('_INDEX', '')] = [
@@ -550,9 +549,9 @@ if __name__ == "__main__":
         print("[TEST MODE ENABLED] Using mock data for API calls")
     
     companies = [
-        "Apple",
-        # "Tesla",
-        # "Temu"
+        "Google",
+        "Tesla",
+        "Temu"
     ]
 
     with open("keys.json", "r") as f:
