@@ -485,7 +485,11 @@ def sum_weights(data: dict[str, list[float]]) -> float:
         metric_data[0] for metric_data in data.values()
     ])
 
-def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=False):
+def empty_function(data: dict):
+    print(f"Passing {data.keys()}")
+    pass
+
+def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=False, add_data=empty_function):
     if "vertexai_project_name" in keys.keys():
         gemini_client = genai.Client(
             vertexai=True,
@@ -531,19 +535,21 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
         competitors = ask_compeditors(company, gemini_client, test_mode=test_mode)
         
         # Store results
-        if metrics:
-            all_company_data[string_standard_formatting(company)] = {
+        if metrics: 
+            output_data = {
                 "metrics": metrics,
                 "full_name": company,
                 "competitors": competitors,
                 "sources": sources,
                 "date": int(time.time())
             }
+            all_company_data[string_standard_formatting(company)] = output_data
+            add_data({string_standard_formatting(company): output_data})
 
     return all_company_data
 
 if __name__ == "__main__":
-    TEST_MODE = False
+    TEST_MODE = True
 
     if TEST_MODE:
         print("[TEST MODE ENABLED] Using mock data for API calls")
