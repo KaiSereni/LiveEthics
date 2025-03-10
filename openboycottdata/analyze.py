@@ -340,7 +340,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
                 print(f"No result items for {company_name} {description}")
                 break
             result_items = result["items"]
-            print(f"Found {result_items.__len__()} Google sources for {company_name} {issue_desc}")
+            print(f"Found {result_items.__len__()} Google sources for {company_name} {description}")
             failed_articles = 0
             for item in result_items:
                 link = item.get("link")
