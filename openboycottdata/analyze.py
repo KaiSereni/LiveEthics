@@ -485,11 +485,21 @@ def sum_weights(data: dict[str, list[float]]) -> float:
         metric_data[0] for metric_data in data.values()
     ])
 
-def empty_function(data: dict):
+def empty_function_add_data(data: dict):
     print(f"Passing {data.keys()}")
     pass
 
-def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=False, add_data=empty_function):
+def empty_function_skip_company(company: str):
+    return True
+
+def analyze_companies(
+        companies: list[str], 
+        keys: dict[str, str], 
+        test_mode=False, 
+        add_data=empty_function_add_data, 
+        skip_company=empty_function_skip_company
+    ) -> dict[str, dict[str, list[float]]]:
+    
     if "vertexai_project_name" in keys.keys():
         gemini_client = genai.Client(
             vertexai=True,
@@ -502,6 +512,9 @@ def analyze_companies(companies: list[str], keys: dict[str, str], test_mode=Fals
     all_company_data = {}
     for company in companies:
         print(f"Analyzing {company}...")
+        if (skip_company(company)):
+            print(f"Skipping {company}")
+            continue
 
         # Get Google search data
         if "google" in keys.keys():
