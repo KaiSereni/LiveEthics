@@ -512,7 +512,7 @@ def analyze_companies(
     all_company_data = {}
     for company in companies:
         print(f"Analyzing {company}...")
-        if (skip_company(company)):
+        if (skip_company(string_standard_formatting(company))):
             print(f"Skipping {company}")
             continue
 
