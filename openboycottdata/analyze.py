@@ -16,8 +16,6 @@ issues = {
     "POLI": "Progressive political engagement"
 }
 
-model_id = "gemini-2.0-flash"
-
 issues_funcs: list[types.FunctionDeclaration] = []
 
 def string_standard_formatting(string: str):
@@ -148,7 +146,7 @@ research_and_scoring_tool = types.Tool(google_search=types.GoogleSearch(), funct
 grounding_tool = types.Tool(google_search=types.GoogleSearch())
 research_scoring_tool = types.Tool(function_declarations=research_scoring_tool_funcs)
 
-def ask_about_article(input_text: str, gemini_client: genai.Client):
+def ask_about_article(input_text: str, gemini_client: genai.Client, model_id: str) -> dict:
     for attempt in range(5):
         try:
             response = gemini_client.models.generate_content(
@@ -298,7 +296,7 @@ def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
     except Exception as e:
         return {}
 
-def data_google(company_name: str, google_key: str, gemini_client: genai.Client, test_mode=False) -> dict[str, dict[str, list[float]]]:
+def data_google(company_name: str, google_key: str, gemini_client: genai.Client, model_id:str, test_mode=False) -> dict[str, dict[str, list[float]]]:
     print(f"Googling {company_name}...")
     if test_mode:
         return get_test_google_data(company_name)
@@ -370,7 +368,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
             continue
         formatted_articles = [f"ARTICLE {i+1}: {article}" for i, article in enumerate(articles)]
         prompt = f"COMPANY NAME: {company_name}\nARTICLE(S): {' '.join(formatted_articles)}"
-        response = ask_about_article(prompt, gemini_client)
+        response = ask_about_article(prompt, gemini_client, model_id)
         datasets.append(response)
     
     final_metrics = aggregate_metrics(datasets)
@@ -380,7 +378,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         "sources": link_list
     }
 
-def data_grounded_gemini(company_name: str, gemini_client: genai.Client, test_mode=False) -> dict[str, list[float]]:
+def data_grounded_gemini(company_name: str, gemini_client: genai.Client, model_id:str, test_mode=False) -> dict[str, list[float]]:
     print(f"Getting Gemini data for {company_name}...")
     if test_mode:
         return get_test_gemini_response(company_name)
@@ -438,7 +436,7 @@ def data_grounded_gemini(company_name: str, gemini_client: genai.Client, test_mo
             print(f"Error in data_grounded_gemini: {str(e)}")
             continue
 
-def ask_compeditors(company_name: str, gemini_client: genai.Client, test_mode = False) -> list:
+def ask_compeditors(company_name: str, gemini_client: genai.Client, model_id: str, test_mode = False) -> list:
     print(f"Getting competitors for {company_name}...")
     if test_mode:
         return get_test_competitors(company_name)
@@ -497,7 +495,8 @@ def analyze_companies(
         keys: dict[str, str], 
         test_mode=False, 
         add_data=empty_function_add_data, 
-        skip_company=empty_function_skip_company
+        skip_company=empty_function_skip_company,
+        model_id="gemini-1.5-flash"
     ) -> dict[str, dict[str, list[float]]]:
     
     if "vertexai_project_name" in keys.keys():
@@ -522,7 +521,7 @@ def analyze_companies(
         else:
             google_key = ""
 
-        unformatted_google_data = data_google(company, google_key, gemini_client, test_mode=test_mode)
+        unformatted_google_data = data_google(company, google_key, gemini_client, model_id, test_mode=test_mode)
         google_data = unformatted_google_data['data']
         sources = unformatted_google_data['sources']
 
@@ -538,14 +537,14 @@ def analyze_companies(
         print(f"FMP data total: {sum_weights(fmp_data)}")
 
         # Get Gemini grounded data
-        gemini_response = data_grounded_gemini(company, gemini_client, test_mode=test_mode)
+        gemini_response = data_grounded_gemini(company, gemini_client, model_id, test_mode=test_mode)
         print(f"Gemini data total: {sum_weights(gemini_response)}")
 
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
         
         # Get competitors
-        competitors = ask_compeditors(company, gemini_client, test_mode=test_mode)
+        competitors = ask_compeditors(company, gemini_client, model_id, test_mode=test_mode)
         
         # Store results
         if metrics: 
@@ -569,14 +568,14 @@ if __name__ == "__main__":
     
     companies = [
         "Google",
-        "Tesla",
-        "Temu"
+        # "Tesla",
+        # "Temu"
     ]
 
     with open("keys.json", "r") as f:
         keys = json.load(f)
 
-    final_data = analyze_companies(companies, keys, test_mode=TEST_MODE)
+    final_data = analyze_companies(companies, keys, test_mode=TEST_MODE, skip_company=lambda x: False)
     if not TEST_MODE:
         try:
             with open("output.json", "r") as f:
