@@ -159,6 +159,41 @@ def ask_about_article(input_text: str, gemini_client: genai.Client, model_id: st
                     top_p=0.1
                 )
             )
+            # Add validation of response structure
+            if not response or not response.candidates or not response.candidates[0].content:
+                print(f"Invalid response structure on attempt {attempt + 1}")
+                if attempt == 4:
+                    return {}
+                time.sleep(30)
+                continue
+                
+            response_parts = response.candidates[0].content.parts
+            if not response_parts:
+                print(f"No response parts found on attempt {attempt + 1}")
+                if attempt == 4:
+                    return {}
+                time.sleep(30)
+                continue
+
+            output = {}
+            for part in response_parts:
+                try:
+                    assert "function_call" in part.model_dump().keys() 
+                    assert "args" in part.function_call.model_dump().keys()
+                except:
+                    continue
+                if "score" in part.function_call.args.keys():
+                    output[part.function_call.name.replace('_INDEX', '')] = [
+                        part.function_call.args["weight"],
+                        part.function_call.args["score"]
+                    ]
+                else:
+                    output[part.function_call.name.replace('_INDEX', '')] = [0, 0]
+            
+            if output:
+                return output
+            print("No valid output found in response")
+            
         except errors.ClientError as e:
             if not e.code == 429:
                 raise
@@ -174,26 +209,11 @@ def ask_about_article(input_text: str, gemini_client: genai.Client, model_id: st
                 tb()
                 print(f"FATAL: gemini error final retry, returning empty dict")
                 return {}
-            print(f"Error in data_grounded_gemini: {str(e)}")
+            print(f"Error in ask_about_article: {str(e)}")
+            time.sleep(30)
             continue
-    response_parts = response.candidates[0].content.parts
-    output = {}
-    for part in response_parts:
-        try:
-            assert "function_call" in part.model_dump().keys() 
-            assert "args" in part.function_call.model_dump().keys()
-        except:
-            continue
-        if "score" in part.function_call.args.keys():
-            output[part.function_call.name.replace('_INDEX', '')] = [
-                part.function_call.args["weight"],
-                part.function_call.args["score"]
-            ]
-        else:
-            output[part.function_call.name.replace('_INDEX', '')] = [0, 0]
-    if not output:
-        print("No output found")
-    return output
+    
+    return {}
 
 def extract_text_from_html(html_string):
     try:
