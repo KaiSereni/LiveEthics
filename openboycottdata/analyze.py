@@ -271,14 +271,20 @@ def aggregate_metrics(metrics_list: list[dict[str, list[float]]]) -> dict[str, l
     combined_metrics: dict[str, list[list[float]]] = {}
     for metrics in metrics_list:
         for issue_id, data in metrics.items():
+            # Skip invalid data
+            if not data or len(data) != 2 or any(x is None for x in data):
+                continue
+                
             if issue_id not in combined_metrics:
                 combined_metrics[issue_id] = []
                 
-            # Ensure data is in correct format [weight, score]
-            if not (isinstance(data, list) and len(data) == 2):
+            try:
+                # Convert data to floats with validation
+                weight = float(data[0])
+                score = float(data[1])
+                combined_metrics[issue_id].append([weight, score])
+            except (ValueError, TypeError):
                 continue
-            weight, score = float(data[0]), float(data[1])
-            combined_metrics[issue_id].append([weight, score])
     
     # Calculate weighted averages for each issue
     for issue_id, data_points in combined_metrics.items():
