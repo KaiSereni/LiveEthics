@@ -2,3 +2,6 @@ keys.json
 .DS_Store
 output.json
 .venv/
+/build/
+*.egg-info
+**/__pycache__/

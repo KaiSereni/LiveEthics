@@ -90,7 +90,7 @@ research_competition_info_funcs = [
     types.FunctionDeclaration(
         name="list_competition",
         description=""" \
-List 1-20 of the specified company's most valuable products, services, or properties. 
+List 1-20 of the specified company's most valuable products, and/or services. 
 For each product, list whether it's commonly available online, and whether it's commonly available in-person. \
 For example, Alphabet Co's search engine Google would be their most valuable property, which is available \
 online but not in-person. Apple's product iPhone would be their most valuable property, which is available for purchase both \
@@ -504,6 +504,53 @@ compile any data you find in the list_competition function. This function must b
     
     return []  # Fallback if all retries failed
 
+def ask_alt_names(company_name: str, gemini_client: genai.Client, model_id: str, test_mode = False) -> list:
+    print(f"Getting alt names for {company_name}...")
+    if test_mode:
+        return []
+    for attempt in range(5):
+        try:
+            prompt = f"""List as many alternate names by which the company \"{company_name}\" is known as you can, including:
+- Common abbreviations (e.g. IBM for International Business Machines)
+- Former names (e.g. Google before it became Alphabet)
+- Parent/subsidiary relationships (e.g. Instagram being owned by Meta)
+- Common misspellings or variations
+- Stock ticker symbols
+- Versions with or without corporate suffixes (Co, corp, Inc, LLC, etc.)
+Do not include generic terms. Do not include the names of any of the company's products or services unless that product or service name was a previous name of the company.
+Your response should be a list of comma-separated strings wrapped in square brackets. There should only be one pair of square brackets im your response.
+example response: ["Meta Platforms", "Facebook", "Face Book", "Meta Inc"]"""
+            response = gemini_client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0,
+                    top_k=1,
+                    top_p=0.1
+                )
+            ).text
+
+            try:
+                matches = re.findall(r'\[(.*?)\]', response)
+                if matches:
+                    # Get first match and split on commas, strip whitespace and quotes
+                    names = [name.strip().strip('"\'') for name in matches[0].split(',')]
+                    return names
+            except:
+                pass
+            
+        except errors.ClientError as e:
+            if e.code == 429:
+                print(e.message)
+                if attempt < 4:
+                    time.sleep(300 * attempt + 60)
+                    continue
+            raise
+        except Exception as e:
+            tb()
+
+    return []  # Fallback if all retries failed
+
 def sum_weights(data: dict[str, list[float]]) -> float:
     return sum([
         metric_data[0] for metric_data in data.values()
@@ -514,7 +561,7 @@ def empty_function_add_data(data: dict):
     pass
 
 def empty_function_skip_company(company: str):
-    return True
+    return False
 
 def analyze_companies(
         companies: list[str], 
@@ -547,9 +594,9 @@ def analyze_companies(
         else:
             google_key = ""
 
-        unformatted_google_data = data_google(company, google_key, gemini_client, model_id, test_mode=test_mode)
-        google_data = unformatted_google_data['data']
-        sources = unformatted_google_data['sources']
+        #unformatted_google_data = data_google(company, google_key, gemini_client, model_id, test_mode=test_mode)
+        google_data = {} #unformatted_google_data['data']
+        google_sources = []#unformatted_google_data['sources']
 
         print(f"Google data total: {sum_weights(google_data)}")
         
@@ -559,7 +606,7 @@ def analyze_companies(
         else:
             fmp_key = ""
 
-        fmp_data = data_fmp(company, fmp_key, test_mode=test_mode)
+        fmp_data = {}#data_fmp(company, fmp_key, test_mode=test_mode)
         print(f"FMP data total: {sum_weights(fmp_data)}")
 
         # Get Gemini grounded data
@@ -569,8 +616,9 @@ def analyze_companies(
         # Aggregate metrics
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
         
-        # Get competitors
+        # Get metadata
         competitors = ask_compeditors(company, gemini_client, model_id, test_mode=test_mode)
+        alt_names = ask_alt_names(company, gemini_client, model_id, test_mode=test_mode)
         
         # Store results
         if metrics: 
@@ -578,7 +626,8 @@ def analyze_companies(
                 "metrics": metrics,
                 "full_name": company,
                 "competitors": competitors,
-                "sources": sources,
+                "alt_names": alt_names,
+                "sources": google_sources,
                 "date": int(time.time())
             }
             all_company_data[string_standard_formatting(company)] = output_data
