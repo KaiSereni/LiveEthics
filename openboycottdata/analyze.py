@@ -121,6 +121,11 @@ Write the company's security name, without any class specifications and without 
                                     properties={
                                         "product_name": types.Schema(type="STRING"),
                                         "parent_company": types.Schema(type="STRING"),
+                                        "alt_product_names": types.Schema(
+                                            type="ARRAY",
+                                            description="Broad list of alternate names commonly used to refer to the product. For example, alternate names for Google would include Google Search, GoogleSearch, Search, Search Engine, Internet Explorer, Search Bar.",
+                                            items=types.Schema(type="STRING"),
+                                        ),
                                     },
                                 ),
                             ),
