@@ -471,7 +471,7 @@ def ask_compeditors(company_name: str, gemini_client: genai.Client, model_id: st
         try:
             prompt = (
                 f"""\
-COMPANY NAME: {company_name}
+COMPANY NAME: \"{company_name}\"
 List information about the competition for this company's most valuable products or services and \
 compile any data you find in the list_competition function. This function must be called exactly once."""
             )
@@ -518,8 +518,8 @@ def ask_alt_names(company_name: str, gemini_client: genai.Client, model_id: str,
 - Stock ticker symbols
 - Versions with or without corporate suffixes (Co, corp, Inc, LLC, etc.)
 Do not include generic terms. Do not include the names of any of the company's products or services unless that product or service name was a previous name of the company.
-Your response should be a list of comma-separated strings wrapped in square brackets. There should only be one pair of square brackets im your response.
-example response: ["Meta Platforms", "Facebook", "Face Book", "Meta Inc"]"""
+Your response should be a list of comma-separated strings wrapped in square brackets. There should only be one pair of square brackets im your response. Remove any commas from the strings.
+example response for Meta: ["Meta Platforms", "Facebook", "Face Book", "Meta Inc"]"""
             response = gemini_client.models.generate_content(
                 model=model_id,
                 contents=prompt,
