@@ -1,6 +1,6 @@
 [project]
 name = "openboycottdata"
-version = "1.2.1"
+version = "1.2.2"
 description = "A package for company ethics data aggregation."
 authors = [
     { name = "Kai Sereni", email = "kaiserenior@gmail.com" }

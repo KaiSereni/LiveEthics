@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 from google import genai
 from google.genai import errors, types
 
+# This code is awful but at least it's documented
+
 issues = {
     "DEI_L": "DEI in leadership",
     "DEI_H": "DEI in hiring",
@@ -18,12 +20,14 @@ issues = {
 
 issues_funcs: list[types.FunctionDeclaration] = []
 
+# remove spaces, characters, and uppercase
 def string_standard_formatting(string: str):
     string = string.lower().strip()
     string = re.sub(r'[^a-z0-9]', '', string)
     return string
 
-def wait_until_4am(): # waits until the daily API limit resets
+# the search API has a free tier limit of 100 queries per day and I ain't paying for more than 100, I have student loans
+def wait_until_4am():
     """Waits until 4:00 AM local time."""
     print("Waiting until the Google Search API resets so that requests can be made for free")
     while True:
@@ -45,6 +49,7 @@ def wait_until_4am(): # waits until the daily API limit resets
                 time.sleep(remaining_time)
             break
 
+# create a tool the GPT can use to report its findings after reading an article
 for issue_id, issue_desc in issues.items():
     issues_funcs.append(types.FunctionDeclaration(
       name=f"{issue_id}_INDEX",
@@ -57,6 +62,7 @@ Then, score the company in the \"{issue_desc}\" category, from 0-100, given the 
 where 50 means a net-neutral impact, 100 means that the company is a world leader in the category, \
 and 0 means they're doing extensive, lasting damage. If the significance weight is 0, don't include the score."""
       ),
+      # the GPT will report the article's relevance to the given issue, and will assess the company based on the article.
       parameters=types.Schema(
         type="OBJECT",
         required=["weight"],
@@ -71,12 +77,13 @@ and 0 means they're doing extensive, lasting damage. If the significance weight 
       ),
     ))
 
+# Google Gemini can also do its own research manually, and it's a lot cheaper so I let it have a shot at that
 research_scoring_tool_funcs: list[types.FunctionDeclaration] = []
 for function in issues_funcs:
     modified_function = function.model_copy()
     this_issue_id = modified_function.name.replace("_INDEX", "")
     modified_function.description = f"""\
-Regarding "{issues[this_issue_id]}", research score the company defined in the prompt, from 0-100, \
+Regarding "{issues[this_issue_id]}", research and score the company defined in the prompt, from 0-100, \
 where 50 means a net-neutral impact, 100 means \
 that the company is a world leader in the category, \
 and 0 means they're doing extensive, lasting damage. \
@@ -86,6 +93,7 @@ If you couldn't find any information about the company, set the score and weight
 """
     research_scoring_tool_funcs.append(modified_function)
 
+# get a company's competitors. It looks at the main products/services it sells and finds other companies offering similar products.
 research_competition_info_funcs = [
     types.FunctionDeclaration(
         name="list_competition",
@@ -145,12 +153,14 @@ Write the company's security name, without any class specifications and without 
     )
 ]
 
+# create "tools" that can be passed into a gemini call
 research_competition_info_tool = types.Tool(function_declarations=research_competition_info_funcs, google_search=types.GoogleSearch())
 issues_significance_tool = types.Tool(function_declarations=issues_funcs)
 research_and_scoring_tool = types.Tool(google_search=types.GoogleSearch(), function_declarations=issues_funcs)
 grounding_tool = types.Tool(google_search=types.GoogleSearch())
 research_scoring_tool = types.Tool(function_declarations=research_scoring_tool_funcs)
 
+# pass in an article, get scores in different categories
 def ask_about_article(input_text: str, gemini_client: genai.Client, model_id: str) -> dict:
     for attempt in range(5):
         try:
@@ -269,6 +279,9 @@ def get_test_competitors(company_name: str) -> list:
     }
     return test_competitors.get(company_name, ["Competitor 1", "Competitor 2", "Competitor 3"])
 
+# takes a weighted average of lists of scores accross different categories.
+# for example: [{"thing_a": [50, 100], "thing_b": [20, 500]}, {"thing_a": [25, 100], "thing_b": [100, 50]}]
+# returns {"thing_a": [75, 100], "thing_b": [120, 125]}
 def aggregate_metrics(metrics_list: list[dict[str, list[float]]]) -> dict[str, list[float]]:
     aggregated_metrics = {}
     
@@ -310,6 +323,7 @@ def aggregate_metrics(metrics_list: list[dict[str, list[float]]]) -> dict[str, l
     
     return aggregated_metrics
 
+# gets ESG scores, this API is down a lot so I usually disable it
 def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
     print(f"Getting FMP data for {symbol}...")
     if test_mode:
@@ -327,6 +341,7 @@ def data_fmp(symbol: str, fmp_key: str, test_mode=False) -> dict:
     except Exception as e:
         return {}
 
+# scans data from credible sources searched with Google's customsearch API
 def data_google(company_name: str, google_key: str, gemini_client: genai.Client, model_id:str, test_mode=False) -> dict[str, dict[str, list[float]]]:
     print(f"Googling {company_name}...")
     if test_mode:
@@ -409,6 +424,7 @@ def data_google(company_name: str, google_key: str, gemini_client: genai.Client,
         "sources": link_list
     }
 
+# gemini researches and scores companies on its own using the built-in "grounding" tool
 def data_grounded_gemini(company_name: str, gemini_client: genai.Client, model_id:str, test_mode=False) -> dict[str, list[float]]:
     print(f"Getting Gemini data for {company_name}...")
     if test_mode:
@@ -467,7 +483,8 @@ def data_grounded_gemini(company_name: str, gemini_client: genai.Client, model_i
             print(f"Error in data_grounded_gemini: {str(e)}")
             continue
 
-def ask_compeditors(company_name: str, gemini_client: genai.Client, model_id: str, test_mode = False) -> list:
+# gets competition for each of a company's products
+def ask_competitors(company_name: str, gemini_client: genai.Client, model_id: str, test_mode = False) -> list:
     print(f"Getting competitors for {company_name}...")
     if test_mode:
         return get_test_competitors(company_name)
@@ -492,10 +509,10 @@ compile any data you find in the list_competition function. This function must b
                 )
             )
             if response.function_calls:
-                compeditors = response.function_calls[0].args
+                competitors = response.function_calls[0].args
             else:
-                compeditors = []
-            return compeditors
+                competitors = []
+            return competitors
             
         except errors.ClientError as e:
             if e.code == 429:  # Resource exhausted
@@ -509,6 +526,8 @@ compile any data you find in the list_competition function. This function must b
     
     return []  # Fallback if all retries failed
 
+# Other names commonly used to refer to a company, to make searching for a company by name more reliable.
+# for example: Meta Platforms might also be searched as Meta, Facebook, Face Book, etc.
 def ask_alt_names(company_name: str, gemini_client: genai.Client, model_id: str, test_mode = False) -> list:
     print(f"Getting alt names for {company_name}...")
     if test_mode:
@@ -524,7 +543,7 @@ def ask_alt_names(company_name: str, gemini_client: genai.Client, model_id: str,
 - Versions with or without corporate suffixes (Co, corp, Inc, LLC, etc.)
 Do not include generic terms. Do not include the names of any of the company's products or services unless that product or service name was a previous name of the company.
 Your response should be a list of comma-separated strings wrapped in square brackets. There should only be one pair of square brackets im your response. Remove any commas from the strings.
-example response for Meta: ["Meta Platforms", "Facebook", "Face Book", "Meta Inc"]"""
+example response for Meta Platforms: ["Meta", "Facebook", "Face Book", "Meta Inc"]"""
             response = gemini_client.models.generate_content(
                 model=model_id,
                 contents=prompt,
@@ -568,6 +587,7 @@ def empty_function_add_data(data: dict):
 def empty_function_skip_company(company: str):
     return False
 
+# full function
 def analyze_companies(
         companies: list[str], 
         keys: dict[str, str], 
@@ -622,7 +642,7 @@ def analyze_companies(
         metrics = aggregate_metrics([google_data, fmp_data, gemini_response])
         
         # Get metadata
-        competitors = ask_compeditors(company, gemini_client, model_id, test_mode=test_mode)
+        competitors = ask_competitors(company, gemini_client, model_id, test_mode=test_mode)
         alt_names = ask_alt_names(company, gemini_client, model_id, test_mode=test_mode)
         
         # Store results
