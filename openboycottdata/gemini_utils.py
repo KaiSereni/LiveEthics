@@ -3,7 +3,7 @@ import re
 from traceback import print_exc as tb
 from google import genai
 from google.genai import errors, types
-from config import (
+from .config import (
     GEMINI_MODEL_ID, VERTEXAI_PROJECT_NAME, ISSUES,
     ISSUES_SIGNIFICANCE_TOOL, RESEARCH_SCORING_TOOL, RESEARCH_COMPETITION_INFO_TOOL,
     MAX_RETRIES, DEFAULT_RETRY_DELAY, RATE_LIMIT_COOLDOWN_BASE, RATE_LIMIT_COOLDOWN_MULTIPLIER

@@ -3,8 +3,7 @@
 
 import json
 import os
-from analysis import analyze_companies
-from utils import string_standard_formatting # Example utility import
+from .analysis import analyze_companies
 
 # --- Main execution block ---
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ import time
 import datetime
 from traceback import print_exc as tb
 from bs4 import BeautifulSoup
-from config import GOOGLE_SEARCH_DAILY_LIMIT_RESET_HOUR
+from .config import GOOGLE_SEARCH_DAILY_LIMIT_RESET_HOUR
 
 def string_standard_formatting(string: str) -> str:
     """Standardizes a string by converting to lowercase, stripping whitespace,
