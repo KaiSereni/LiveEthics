@@ -104,7 +104,7 @@ def data_google(company_name: str, gemini_client: genai.Client) -> dict:
         start_time = time.time()
         query = quote(f'"{company_name}" "{description}"') # More specific query
         final_googapi_url = BASE_GOOGAPI_URL.format(key=GOOGLE_API_KEY, query=query)
-        print(f"Searching for: {company_name} - {description}")
+        print(f"Searching for: {company_name} {description}")
 
         article_content_list = []
         link_list_for_issue = []
