@@ -21,10 +21,10 @@ def get_gemini_client() -> genai.Client | None:
         except Exception as e:
             print(f"Error initializing Vertex AI client: {e}")
             tb()
-            return None
+            raise ValueError("Failed to initialize Gemini client. Check your environment variables and permissions.")
     else:
         print("Warning: VERTEXAI_PROJECT_NAME not found in environment variables. Cannot initialize Gemini client.")
-        return None
+        raise ValueError("VERTEXAI_PROJECT_NAME not set in environment variables.")
 
 def _handle_gemini_api_call(api_call_func, *args, **kwargs):
     """Generic handler for Gemini API calls with retry logic."""
