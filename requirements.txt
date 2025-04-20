@@ -21,6 +21,7 @@ pyasn1_modules==0.4.1
 pydantic==2.11.0a2
 pydantic_core==2.29.0
 pyparsing==3.2.1
+python-dotenv
 requests==2.32.3
 rsa==4.9
 six==1.17.0
