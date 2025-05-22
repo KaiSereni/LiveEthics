@@ -1,4 +1,4 @@
-# OpenBoycott Data Aggregation Algorithm
+# liveethics Data Aggregation Algorithm
 
 This is a Python project that analyzes companies (eg. Apple, Google, Microsoft, Meta) by evaluating how various issues — such as environmental impact, fair wages, and diversity & inclusion — are mentioned in related articles. The project leverages multiple APIs and AI tools including Google Custom Search, Financial Modeling Prep, and Google's Generative AI (Gemini). All APIs are completely free at the time of writing and only require you to make an account.
 
@@ -16,7 +16,7 @@ This is a Python project that analyzes companies (eg. Apple, Google, Microsoft, 
    Install the package using:
    
    ```
-   pip install git+https://github.com/KaiSereni/OpenBoycott#egg=openboycottdata
+   pip install git+https://github.com/KaiSereni/liveethics#egg=liveethicsdata
    ```
 2. **API Keys**
 
@@ -45,7 +45,7 @@ gcloud config set project [PROJECT_NAME]
 
 Here's an example:
 ```py
-from openboycottdata.analyze import analyze_companies
+from liveethicsdata.analyze import analyze_companies
 
 companies = [
     "Apple",
@@ -72,4 +72,4 @@ with open("output.json", "w") as f:
 
 ```
 
-### Can you code it better? [Branch us](https://github.com/KaiSereni/OpenBoycott/branches) on GitHub!
+### Can you code it better? [Branch us](https://github.com/KaiSereni/liveethics/branches) on GitHub!

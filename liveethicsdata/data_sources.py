@@ -150,7 +150,7 @@ def data_google(company_name: str, gemini_client: genai.Client) -> dict:
 
                     try:
                         # Fetch article content
-                        article_response = requests.get(link, timeout=ARTICLE_REQUEST_TIMEOUT, headers={'User-Agent': 'OpenBoycottBot/1.0'})
+                        article_response = requests.get(link, timeout=ARTICLE_REQUEST_TIMEOUT, headers={'User-Agent': 'liveethicsBot/1.0'})
                         article_response.raise_for_status()
                         # Extract text
                         text_response = extract_text_from_html(article_response.text)

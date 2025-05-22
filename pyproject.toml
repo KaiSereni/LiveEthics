@@ -1,5 +1,5 @@
 [project]
-name = "openboycottdata"
+name = "liveethicsdata"
 version = "1.2.3"
 description = "A package for company ethics data aggregation."
 authors = [
@@ -45,4 +45,4 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["openboycottdata"]
+packages = ["liveethicsdata"]
