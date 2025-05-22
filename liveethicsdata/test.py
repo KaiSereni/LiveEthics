@@ -3,7 +3,7 @@
 
 import json
 import os
-from .analysis import analyze_companies
+from analysis import analyze_companies
 
 # --- Main execution block ---
 if __name__ == "__main__":
@@ -37,6 +37,8 @@ if __name__ == "__main__":
     # Define callback functions (optional)
     def my_add_data_func(data: dict):
         """Custom function to handle data for each company as it's processed."""
+        print(f"data: {data}")
+        exit()
         company_key = list(data.keys())[0]
         print(f"Received data for {data[company_key]['full_name']}. Metrics count: {len(data[company_key]['metrics'])}")
         # Could potentially write to DB or update UI here

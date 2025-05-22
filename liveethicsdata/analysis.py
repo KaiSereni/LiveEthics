@@ -1,9 +1,9 @@
 import time
-from .config import GEMINI_MODEL_ID
-from .utils import string_standard_formatting, sum_weights, empty_function_add_data, empty_function_skip_company
-from .data_sources import data_fmp, data_google
-from .gemini_utils import get_gemini_client, data_grounded_gemini, ask_competitors, ask_alt_names
-from .test_utils import ( # Import test functions if needed for test_mode
+from config import GEMINI_MODEL_ID
+from utils import string_standard_formatting, sum_weights, empty_function_add_data, empty_function_skip_company
+from data_sources import data_fmp, data_google
+from gemini_utils import get_gemini_client, data_grounded_gemini, ask_competitors, ask_alt_names
+from test_utils import ( # Import test functions if needed for test_mode
     get_test_fmp_data, get_test_google_data_structured,
     get_test_gemini_response, get_test_competitors, get_test_alt_names
 )

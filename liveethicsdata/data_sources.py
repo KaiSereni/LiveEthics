@@ -4,12 +4,12 @@ from urllib.parse import quote
 from traceback import print_exc as tb
 from google import genai
 
-from .config import (
+from config import (
     FMP_API_KEY, GOOGLE_API_KEY, ISSUES, BASE_GOOGAPI_URL, FMP_ESG_URL,
     REQUEST_TIMEOUT, ARTICLE_REQUEST_TIMEOUT, GOOGLE_SEARCH_REQUEST_COOLDOWN
 )
-from .utils import wait_until_4am, extract_text_from_html
-from .gemini_utils import ask_about_article, get_gemini_client # Need ask_about_article here
+from utils import wait_until_4am, extract_text_from_html
+from gemini_utils import ask_about_article, get_gemini_client # Need ask_about_article here
 
 # Initialize Gemini client once if needed by data_google
 # This assumes data_google might need the client. If not, remove this.

@@ -3,7 +3,7 @@ import re
 from traceback import print_exc as tb
 from google import genai
 from google.genai import errors, types
-from .config import (
+from config import (
     GEMINI_MODEL_ID, VERTEXAI_PROJECT_NAME, ISSUES,
     ISSUES_SIGNIFICANCE_TOOL, RESEARCH_SCORING_TOOL, RESEARCH_COMPETITION_INFO_TOOL,
     MAX_RETRIES, DEFAULT_RETRY_DELAY, RATE_LIMIT_COOLDOWN_BASE, RATE_LIMIT_COOLDOWN_MULTIPLIER
@@ -94,8 +94,10 @@ def ask_about_article(input_text: str, gemini_client: genai.Client, model_id: st
 
     for part in response_parts:
         try:
+            assert part.function_call
             if "function_call" in part.model_dump() and "args" in part.function_call.model_dump():
                 func_call = part.function_call
+                assert func_call.name and func_call.args
                 issue_id = func_call.name.replace('_INDEX', '')
                 if "score" in func_call.args and "weight" in func_call.args:
                      # Ensure weight and score are numbers, default to 0 if not
@@ -107,7 +109,7 @@ def ask_about_article(input_text: str, gemini_client: genai.Client, model_id: st
                      output[issue_id] = [weight, 0.0] # Assign default score of 0
                 else:
                      output[issue_id] = [0.0, 0.0] # Default if args are missing
-        except (AttributeError, KeyError, ValueError, TypeError) as e:
+        except (AssertionError) as e:
             print(f"Warning: Error processing function call part: {e}. Part: {part}")
             continue # Skip this part and continue with others
 
@@ -163,8 +165,10 @@ Categories:
 
     for part in response_parts:
          try:
+            assert part.function_call
             if "function_call" in part.model_dump() and "args" in part.function_call.model_dump():
                 func_call = part.function_call
+                assert func_call.name and func_call.args
                 function_name = func_call.name.replace('_INDEX', '')
                 if "score" in func_call.args and "weight" in func_call.args:
                     # Ensure weight and score are numbers, default to 0 if not
@@ -176,7 +180,7 @@ Categories:
                     final_output[function_name] = [weight, 0.0] # Assign default score of 0
                 else:
                     final_output[function_name] = [0.0, 0.0] # Default if args are missing
-         except (AttributeError, KeyError, ValueError, TypeError) as e:
+         except (AssertionError) as e:
             print(f"Warning: Error processing function call part in grounded search: {e}. Part: {part}")
             continue # Skip this part
 
@@ -214,7 +218,7 @@ compile any data you find in the list_competition function. This function must b
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=[RESEARCH_COMPETITION_INFO_TOOL],
-                tool_config=types.FunctionCallingConfig(mode="any"), # Ensure function is called
+                tool_config=types.ToolConfig(function_calling_config=types.FunctionCallingConfig(mode=types.FunctionCallingConfigMode.ANY)), # Ensure function is called
                 temperature=0,
                 top_k=1,
                 top_p=0.1
@@ -227,14 +231,14 @@ compile any data you find in the list_competition function. This function must b
     try:
         # Check if response and function_calls exist
         if response and response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-             # Find the first part that is a function call
-             function_call_part = next((part for part in response.candidates[0].content.parts if part.function_call), None)
-             if function_call_part and function_call_part.function_call.name == "list_competition":
-                 # Safely access args, defaulting to an empty dict if not present
-                 competitors_data = getattr(function_call_part.function_call, 'args', {})
-                 # Return the value associated with 'products' key, or empty list if key missing or data is None
-                 return competitors_data.get('products', []) if competitors_data else []
-    except (AttributeError, IndexError, TypeError) as e:
+            # Find the first part that is a function call
+            function_call_part = next((part for part in response.candidates[0].content.parts if part.function_call), None)
+            assert function_call_part
+            assert function_call_part.function_call
+            assert function_call_part.function_call.name == "list_competition"
+            competitors_data = getattr(function_call_part.function_call, 'args', {})
+            return competitors_data.get('products', []) if competitors_data else []
+    except (AssertionError) as e:
         print(f"Error extracting competitor data from Gemini response: {e}")
         tb()
 
