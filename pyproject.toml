@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "liveethics"
+version = "2.0.0"
+description = "A package for company ethics data aggregation."
+requires-python = ">=3.9"
+authors = [
+    { name = "Kai", email = "kai@kai.gallery" }
+]
+dependencies = [
+    "python-dotenv",
+    "google-genai"
+]
+readme = "README.md"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
