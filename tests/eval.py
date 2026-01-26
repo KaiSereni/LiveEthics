@@ -1,4 +1,5 @@
 from src.liveethics.companies import Company, EvaluatedCompany
+# use `liveethics.companes`
 
 test_company = Company("Google", 'GOOG')
 test_evaluation = EvaluatedCompany(test_company)

@@ -55,7 +55,7 @@ RATING_CATEGORIES: list[RatingCategory] = [
     ),
 ]
 
-def generate_gemini_research_prompt(company_name: str, categories: list[RatingCategory] = RATING_CATEGORIES) -> str:
+def _generate_gemini_research_prompt(company_name: str, categories: list[RatingCategory] = RATING_CATEGORIES) -> str:
     assert len(categories) > 1
     prompt = f"""\
 You are a corporate ethics researcher. Your goal is to search the web and write a detailed report that evaluates the \
@@ -69,7 +69,7 @@ The company you will be evaluating is "{company_name}", and you will be consider
 
     return prompt
 
-def generate_gemini_scructured_prompt_and_schema(company_name: str, research_report: str, categories: list[RatingCategory] = RATING_CATEGORIES) -> tuple[str, genai.types.Schema]:
+def _generate_gemini_scructured_prompt_and_schema(company_name: str, research_report: str, categories: list[RatingCategory] = RATING_CATEGORIES) -> tuple[str, genai.types.Schema]:
     assert len(categories) > 1
     prompt = f"""\
 You are a corporate ethics evaluator. You will be scoring a company regarding their ethical and moral character, \
@@ -134,11 +134,11 @@ class Company:
     ticker: str
 
     def rate(self) -> list[Rating]:
-        research_prompt = generate_gemini_research_prompt(self.name)
-        gemini = Gem()
+        research_prompt = _generate_gemini_research_prompt(self.name)
+        gemini = _Gem()
         research_report = gemini.call_gemini_research(research_prompt, grounding=True)
 
-        scoring_prompt, schema = generate_gemini_scructured_prompt_and_schema(self.name, research_report)
+        scoring_prompt, schema = _generate_gemini_scructured_prompt_and_schema(self.name, research_report)
         ratings_data = gemini.call_gemini_structured(scoring_prompt, schema)
 
         ratings = []
@@ -166,11 +166,15 @@ class EvaluatedCompany:
     def __str__(self):
         return '\n'.join([str(r) for r in self.ratings])
 
-class Gem:
+class _Gem:
     client: genai.Client
 
     def __init__(self):
         self.chat_history = []
+        try:
+            assert os.environ.get("GEMINI_KEY")
+        except AssertionError:
+            raise AssertionError("Remember to add your Gemini API key to your .env file in a variable called `GEMINI_KEY`. Read the `README` for more information.")
         self.client = genai.Client(api_key=os.environ.get("GEMINI_KEY"))
 
     def call_gemini_structured(self, prompt: str, out_schema: gemtypes.Schema) -> dict:
