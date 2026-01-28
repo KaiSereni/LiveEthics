@@ -180,7 +180,11 @@ class _Gem:
     def call_gemini_structured(self, prompt: str, out_schema: gemtypes.Schema) -> dict:
         config = gemtypes.GenerateContentConfig(
             response_mime_type="application/json",
-            response_schema=out_schema
+            response_schema=out_schema,
+            temperature=0.0,
+            top_k=1,
+            top_p=1,
+            seed=420
         )
 
         response = self.client.models.generate_content(
