@@ -16,7 +16,7 @@ RATING_CATEGORIES: list[RatingCategory] = [
     RatingCategory(
         category_id='progressive_lobbying',
         category_name='Progressive Lobbying',
-        ai_description="The approximate ratio of dollars spent on lobbying or support for progressive political candidates vs conservative candidates."
+        ai_description="The approximate ratio of dollars spent on lobbying or support for progressive political candidates vs conservative candidates. A progressive candidate supports the protection of LGBTQ, BIPOC, and human rights, taxing the rich and corporations, overturning Citizens United v. FEC, banning congressional stock trading, etc."
     ),
     RatingCategory(
         category_id='leadership_dei',
@@ -31,7 +31,7 @@ RATING_CATEGORIES: list[RatingCategory] = [
     RatingCategory(
         category_id='environmental_impact',
         category_name='Environmental Impact',
-        ai_description="Companies that damage the environment will have a low score, companies that have a positive impact on the environment will have a very high score. Environmental damage includes high water usage, carbon emissions, deforestation, etc. Positive environmental impacts include usage of or investment in clean energy (solar, wind, nuclear, etc.), regenerative practices, supporting green causes, etc."
+        ai_description="Companies that damage the environment will have a low score, companies that have a positive impact on the environment will have a very high score. Environmental damage includes high water usage, carbon emissions, deforestation, etc. Positive environmental impacts include usage of or investment in clean energy (solar, wind, hydroelectric, nuclear, etc.), regenerative practices, supporting green causes, etc."
     ),
     RatingCategory(
         category_id='lgbtq_support',
